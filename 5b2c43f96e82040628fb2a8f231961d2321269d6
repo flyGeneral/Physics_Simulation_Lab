@@ -1,0 +1,163 @@
+md-docs/mic/sampling.md
+  a9f70497fe506e24 1-81
+package.json
+  a9f70497fe506e24 1-17
+src/common/gizmo/Trace.ts
+  a9f70497fe506e24 1-103
+src/anim-player/controls.ts
+  a9f70497fe506e24 1-121
+src/docs/loader.ts
+  a9f70497fe506e24 1-56
+src/router/routes.ts
+  a9f70497fe506e24 1-14
+src/pages/home.ts
+  a9f70497fe506e24 1-107
+src/simulator/SimBench.ts
+  a9f70497fe506e24 1-221
+assets/logo.svg
+  a9f70497fe506e24 1-4
+vite.config.ts
+  a9f70497fe506e24 1-15
+src/anim-player/scriptRegistry.ts
+  a9f70497fe506e24 1-24
+md-docs/mic/overview.md
+  a9f70497fe506e24 1-64
+src/docs/markdown.ts
+  a9f70497fe506e24 1-243
+src/pages/about.ts
+  a9f70497fe506e24 1-56
+src/docs/frontmatter.ts
+  a9f70497fe506e24 1-29
+src/common/dom.ts
+  a9f70497fe506e24 1-32
+.gitignore
+  a9f70497fe506e24 1-4
+src/common/canvas/CanvasStage.ts
+  a9f70497fe506e24 1-63
+src/simulator/benches/mic-bench.ts
+  a9f70497fe506e24 1-78
+src/pages/devCheck.ts
+  a9f70497fe506e24 1-145
+src/styles/base.css
+  a9f70497fe506e24 1-260
+src/router/router.ts
+  a9f70497fe506e24 1-103
+src/anim-player/types.ts
+  a9f70497fe506e24 1-38
+src/anim-player/scripts/mic-sampling/views.ts
+  a9f70497fe506e24 1-236
+src/common/math/Ring.ts
+  a9f70497fe506e24 1-31
+src/docs/sidebar.ts
+  a9f70497fe506e24 1-39
+src/common/canvas/palette.ts
+  a9f70497fe506e24 1-36
+src/anim-player/scripts/mic-sampling/index.ts
+  a9f70497fe506e24 1-89
+src/anim-player/AnimPlayer.ts
+  a9f70497fe506e24 1-248
+src/common/physics/audio.ts
+  a9f70497fe506e24 1-58
+src/anim-player/scripts/camera-shutter/scene.ts
+  a9f70497fe506e24 1-98
+README.md
+  a9f70497fe506e24 1-55
+tsconfig.json
+  a9f70497fe506e24 1-22
+src/common/math/Prng.ts
+  a9f70497fe506e24 1-57
+src/simulator/types.ts
+  a9f70497fe506e24 1-41
+src/simulator/benches/camera-bench.ts
+  a9f70497fe506e24 1-79
+src/common/gizmo/Marker.ts
+  a9f70497fe506e24 1-86
+src/anim-player/scripts/sandbox/model.ts
+  a9f70497fe506e24 1-48
+index.html
+  a9f70497fe506e24 1-29
+src/anim-player/scripts/sandbox/views.ts
+  a9f70497fe506e24 1-110
+src/anim-player/scripts/mic-sampling/readout.ts
+  a9f70497fe506e24 1-29
+md-docs/camera/overview.md
+  a9f70497fe506e24 1-72
+src/anim-player/scripts/sandbox/index.ts
+  a9f70497fe506e24 1-38
+md-docs/mic/quantization.md
+  a9f70497fe506e24 1-75
+src/simulator/ParamPanel.ts
+  a9f70497fe506e24 1-86
+src/main.ts
+  a9f70497fe506e24 1-9
+src/anim-player/scripts/camera-shutter/views.ts
+  a9f70497fe506e24 1-242
+src/anim-player/scripts/camera-shutter/index.ts
+  a9f70497fe506e24 1-81
+src/common/timeline/Timeline.ts
+  a9f70497fe506e24 1-280
+src/common/math/dsp.ts
+  a9f70497fe506e24 1-94
+src/common/physics/camera.ts
+  a9f70497fe506e24 1-62
+src/common/timeline/types.ts
+  a9f70497fe506e24 1-102
+md-docs/index.md
+  a9f70497fe506e24 1-40
+src/common/timeline/Clock.ts
+  a9f70497fe506e24 1-29
+src/anim-player/scripts/mic-sampling/model.ts
+  a9f70497fe506e24 1-101
+src/common/gizmo/Grid.ts
+  a9f70497fe506e24 1-78
+src/simulator/benchRegistry.ts
+  a9f70497fe506e24 1-21
+src/anim-player/scripts/camera-shutter/model.ts
+  a9f70497fe506e24 1-140
+src/anim-player/embed.ts
+  a9f70497fe506e24 1-87
+src/common/gizmo/Meter.ts
+  a9f70497fe506e24 1-70
+src/docs/DocPage.ts
+  a9f70497fe506e24 1-69
+src/styles/components.css
+  a9f70497fe506e24 1-227
+src/common/math/utils.ts
+  a9f70497fe506e24 1-57
+md-docs/camera/shutter.md
+  a9f70497fe506e24 1-75
+md-docs/camera/exposure.md
+  a9f70497fe506e24 1-62
+md-docs/camera/noise.md
+  a9f70497fe506e24 1-75
+src/anim-player/ticker.ts
+  a9f70497fe506e24 1-23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.8.1",
+  "base_commit_sha": "5b2c43f96e82040628fb2a8f231961d2321269d6",
+  "prompts": {
+    "a9f70497fe506e24": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a4710728-d609-4157-8dc8-95554f570219",
+        "model": "glm-5.3"
+      },
+      "human_author": "chenjinghao <chenjinghao@cvte.com>",
+      "messages": [],
+      "total_additions": 5742,
+      "total_deletions": 160,
+      "accepted_lines": 5564,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/3474afe2b90d1463da5d859b51b24fad00f72928bdce11dbc85a35dcd033175a",
+      "token_usage": {
+        "input_tokens": 570708,
+        "output_tokens": 469621,
+        "cache_read_tokens": 26838848,
+        "cache_creation_tokens": 0,
+        "total_cost": null
+      }
+    }
+  }
+}
