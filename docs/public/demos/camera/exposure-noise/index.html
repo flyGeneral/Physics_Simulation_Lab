@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>曝光与噪声仿真台 · 散粒噪声 / 读出噪声 / SNR / 动态范围</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#161a21; --line:#262c36; --txt:#e8eaf0; --dim:#9aa3b2;
+    --cyan:#4cc9f0; --green:#7ae582; --orange:#f4a261; --yellow:#ffd166;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+       font:14px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:14px}
+  header h1{font-size:18px;margin:0 0 2px}
+  header .sub{color:var(--dim);font-size:12.5px;margin:0 0 12px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:12px 0}
+  .row{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end}
+  label.sl{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--dim)}
+  label.sl b{color:var(--txt);font-weight:600;font-size:12.5px}
+  input[type=range]{width:150px;accent-color:var(--cyan)}
+  button.act{background:#1d232e;border:1px solid var(--line);color:var(--txt);border-radius:8px;
+             padding:6px 12px;cursor:pointer;font-size:13px}
+  button.act:hover{border-color:var(--cyan);color:var(--cyan)}
+  label.ck{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--dim);cursor:pointer}
+  .views{display:flex;gap:12px;flex-wrap:wrap}
+  .view{flex:1;min-width:320px}
+  .view-title{font-size:12.5px;color:var(--dim);margin:0 0 6px}
+  canvas{display:block;width:100%;border-radius:8px;border:1px solid var(--line);background:#0b0d11}
+  .summary{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--dim);padding:9px 2px 0}
+  .summary b{color:var(--txt)}
+  table{border-collapse:collapse;width:100%;font-size:12.5px}
+  th,td{border:1px solid var(--line);padding:4px 8px;text-align:right;white-space:nowrap}
+  th{color:var(--dim);font-weight:600;background:var(--panel)}
+  td:first-child,th:first-child{text-align:left}
+  tr.sel td{background:rgba(76,201,240,0.1)}
+  .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+  .note{color:var(--dim);font-size:12px;margin:10px 0 0}
+</style>
+</head>
+<body>
+<header>
+  <h1>曝光与噪声仿真台</h1>
+  <p class="sub">灰阶标板被「拍照」：每个像素的光子数服从泊松分布（散粒噪声 σ=√N），叠加高斯读出噪声，再经增益量化。调参数，看 SNR 如何只跟随光子数变化。</p>
+</header>
+
+<div class="views">
+  <div class="view">
+    <div class="view-title">成像画面（低分辨率放大，颗粒即噪声；点击灰阶条选择「光子雨」观察对象）</div>
+    <canvas id="im"></canvas>
+  </div>
+  <div class="view">
+    <div class="view-title">单个像素的光子雨（选中灰阶）</div>
+    <canvas id="rain"></canvas>
+    <div class="view-title" style="margin-top:10px">SNR 理论曲线与实测点（横轴：电子数，对数）</div>
+    <canvas id="plot"></canvas>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="row">
+    <button class="act" id="capBtn">📸 拍一帧</button>
+    <label class="sl">场景亮度 <b><span id="LxV">50</span> %</b>
+      <input type="range" id="Lx" min="1" max="100" step="1" value="50"></label>
+    <label class="sl">曝光时间 <b><span id="tV">5</span> ms</b>
+      <input type="range" id="t" min="0.1" max="40" step="0.1" value="5"></label>
+    <label class="sl">模拟增益 <b>×<span id="gV">4</span></b>
+      <input type="range" id="g" min="0" max="5" step="1" value="2"></label>
+    <label class="sl">读出噪声 <b><span id="rnV">2.5</span> e⁻</b>
+      <input type="range" id="rn" min="0.5" max="10" step="0.5" value="2.5"></label>
+    <label class="ck"><input type="checkbox" id="auto" checked>连续预览</label>
+    <label class="ck"><input type="checkbox" id="ideal">显示理想无噪图像</label>
+  </div>
+</div>
+
+<div class="panel">
+  <table id="tbl">
+    <thead><tr>
+      <th>灰阶</th><th>反射率</th><th>期望电子数 N̄</th>
+      <th>σ理论 = √(N̄+σr²)</th><th>σ实测</th><th>SNR 实测</th><th>削波</th>
+    </tr></thead>
+    <tbody></tbody>
+  </table>
+  <div class="summary" id="summary"></div>
+</div>
+
+<p class="note">模型：N̄ = 4000 e⁻ × 亮度 × (曝光/10ms) × 反射率；散粒噪声为泊松分布，读出噪声为高斯（σr），增益同时放大信号与噪声，满阱 6000 e⁻（超出即饱和削波）。QE 视为 1，暗电流未模拟。</p>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+
+/* ---------------- 参数 ---------------- */
+const FULLWELL = 6000;          // 满阱 e⁻
+const BASE_E   = 4000;          // 100% 亮度 + 10ms 曝光 + 100% 反射率时的电子数
+const GAINS   = [1,2,4,8,16,32];
+const KDN     = 0.05;           // 电子 → 8bit 灰度的换算（增益×1 时 4000e⁻ ≈ 200）
+const P = { L:50, t:5, g:2, rn:2.5 };   // g 为 GAINS 下标
+const LW = 128, LH = 72, PATCHES = 8;   // 低分辨率图像与灰阶条数
+let selP = 4;                            // 光子雨观察的灰阶（0=最亮 … 7=最暗）
+const refl = i => 1 - i*(1/PATCHES);     // 100% … 12.5%
+
+/* ---------------- 随机数 ---------------- */
+function gauss(){
+  let u=0,v=0;
+  while(u===0)u=Math.random(); while(v===0)v=Math.random();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+}
+function poisson(lam){
+  if(lam <= 0) return 0;
+  if(lam < 30){
+    const L = Math.exp(-lam); let k=0, p=1;
+    do { k++; p *= Math.random(); } while(p > L);
+    return k-1;
+  }
+  return Math.max(0, Math.round(lam + Math.sqrt(lam)*gauss()));
+}
+
+/* ---------------- 画布 ---------------- */
+const imC = $('im'), rainC = $('rain'), plotC = $('plot');
+const IM_W=760, IM_H=380, GUT=112, IMX=GUT, IMY=8, IMW=640, IMH=360;
+const RAIN_W=352, RAIN_H=258, PLOT_W=352, PLOT_H=168;
+function setup(c,w,h){
+  const d = window.devicePixelRatio||1;
+  c.width=w*d; c.height=h*d; c.getContext('2d').setTransform(d,0,0,d,0,0);
+}
+setup(imC,IM_W,IM_H); setup(rainC,RAIN_W,RAIN_H); setup(plotC,PLOT_W,PLOT_H);
+const ig = imC.getContext('2d'), rg = rainC.getContext('2d'), pg = plotC.getContext('2d');
+ig.imageSmoothingEnabled = false;
+
+const Ntheo = i => BASE_E * (P.L/100) * (P.t/10) * refl(i);
+
+/* ---------------- 拍一帧 ---------------- */
+const off = document.createElement('canvas');
+off.width = LW; off.height = LH;
+const og = off.getContext('2d');
+const imgD = og.createImageData(LW, LH);
+let stats = [];   // 每灰阶统计
+let rain = null;  // 光子雨状态
+
+function capture(){
+  const g = GAINS[P.g];
+  stats = [];
+  for(let i=0;i<PATCHES;i++) stats.push({n:0, mean:0, var_:0, clip:0});
+  const acc = [];  // 每灰阶像素电子样本
+  for(let i=0;i<PATCHES;i++) acc.push([]);
+  for(let y=0;y<LH;y++){
+    const p = Math.min(PATCHES-1, Math.floor(y/(LH/PATCHES)));
+    const lam = Ntheo(p);
+    for(let x=0;x<LW;x++){
+      let e;
+      if($('ideal').checked){
+        e = lam;
+      }else{
+        e = Math.min(poisson(lam), FULLWELL) + P.rn*gauss();
+      }
+      acc[p].push(e);
+      const dn = Math.max(0, Math.min(255, Math.round(e * g * KDN)));
+      const o = (y*LW+x)*4;
+      imgD.data[o]=dn; imgD.data[o+1]=dn; imgD.data[o+2]=dn; imgD.data[o+3]=255;
+    }
+  }
+  og.putImageData(imgD, 0, 0);
+  for(let i=0;i<PATCHES;i++){
+    const a = acc[i];
+    let m=0; for(const v of a) m+=v; m/=a.length;
+    let s=0; for(const v of a) s+=(v-m)*(v-m);
+    const sd = Math.sqrt(s/a.length);
+    let clip=0; for(const v of a) if(v*g*KDN >= 254.5) clip++;
+    stats[i] = { mean:m, sd, clip: clip/a.length, n:a.length };
+  }
+  startRain(poisson(Ntheo(selP)));
+  drawIm(); drawTable(); drawPlot();
+}
+
+/* ---------------- 成像画面 ---------------- */
+function drawIm(){
+  ig.fillStyle='#0b0d11'; ig.fillRect(0,0,IM_W,IM_H);
+  ig.drawImage(off, 0,0,LW,LH, IMX,IMY,IMW,IMH);
+  const ph = IMH/PATCHES;
+  for(let i=0;i<PATCHES;i++){
+    const y = IMY + i*ph;
+    ig.fillStyle = '#9aa3b2'; ig.font='11px sans-serif'; ig.textAlign='left';
+    ig.fillText((refl(i)*100).toFixed(1)+'%', 8, y+ph/2-2);
+    ig.fillStyle = '#66707e'; ig.font='10px sans-serif';
+    ig.fillText('N̄='+Ntheo(i).toFixed(0)+'e⁻', 8, y+ph/2+12);
+    if(i === selP){
+      ig.strokeStyle='#4cc9f0'; ig.lineWidth=2;
+      ig.strokeRect(IMX-1, y+1, IMW+2, ph-2);
+    }
+  }
+  ig.strokeStyle='#262c36'; ig.strokeRect(IMX-0.5, IMY-0.5, IMW+1, IMH+1);
+}
+imC.onclick = ev => {
+  const r = imC.getBoundingClientRect();
+  const x = (ev.clientX-r.left)*(IM_W/r.width), y = (ev.clientY-r.top)*(IM_H/r.height);
+  if(x>=IMX && x<=IMX+IMW && y>=IMY && y<=IMY+IMH){
+    selP = Math.min(PATCHES-1, Math.max(0, Math.floor((y-IMY)/(IMH/PATCHES))));
+    capture();
+  }
+};
+
+/* ---------------- 光子雨 ---------------- */
+function startRain(K){
+  // 光子太多时按组画（每个光点代表若干光子），避免铺满画布
+  const group = Math.max(1, Math.ceil(K/110));
+  rain = { K, group, visK: Math.floor(K/group),
+           spawned:0, landedVis:0, dots:[], t0:performance.now(), dur:900 };
+}
+function drawRain(now){
+  rg.fillStyle='#0b0d11'; rg.fillRect(0,0,RAIN_W,RAIN_H);
+  const px = RAIN_W/2, pyTop = 186, pxW = 120, pxH = 54;
+  // 像素「势阱」
+  rg.strokeStyle='#46536a'; rg.lineWidth=1.5;
+  rg.strokeRect(px-pxW/2, pyTop, pxW, pxH);
+  rg.fillStyle='#141922'; rg.fillRect(px-pxW/2, pyTop, pxW, pxH);
+  if(rain){
+    const landed = rain.landedVis * rain.group;
+    const done = rain.spawned >= rain.visK && rain.dots.length === 0;
+    const frac = Math.min(1, (now-rain.t0)/rain.dur);
+    const due = Math.floor(rain.visK * (done?1:frac));
+    while(rain.spawned < due){
+      rain.dots.push({ x: px + (Math.random()-0.5)*pxW*0.92,
+                       y: -Math.random()*24, v: 0.18+Math.random()*0.16 });
+      rain.spawned++;
+    }
+    for(const d of rain.dots) d.y += d.v*16;
+    for(let i=rain.dots.length-1;i>=0;i--){
+      const d = rain.dots[i];
+      if(d.y >= pyTop){ rain.landedVis++; rain.dots.splice(i,1); }
+    }
+    rg.fillStyle='rgba(143,216,255,0.8)';
+    for(const d of rain.dots){
+      rg.beginPath(); rg.arc(d.x, d.y, 2.2, 0, 7); rg.fill();
+    }
+    // 文字衬底，避免被光点遮挡
+    rg.fillStyle='rgba(11,13,17,0.82)'; rg.fillRect(8, 6, 258, 82);
+    rg.fillStyle='#e8eaf0'; rg.font='12px sans-serif'; rg.textAlign='left';
+    rg.fillText(`本帧光子数：${done ? rain.K : landed}…`, 12, 20);
+    rg.fillStyle='#9aa3b2';
+    rg.fillText(`期望 N̄ = ${Ntheo(selP).toFixed(0)}`, 12, 38);
+    rg.fillText(`σ = √N̄ = ${Math.sqrt(Ntheo(selP)).toFixed(1)}`, 12, 56);
+    rg.fillText(`SNR = 20·log₁₀(N̄/√(N̄+σr²)) = ${snrDb(Ntheo(selP)).toFixed(1)} dB`, 12, 74);
+    if(rain.group > 1){
+      rg.fillStyle='#66707e'; rg.font='11px sans-serif';
+      rg.fillText(`（光点分组显示：每个光点 ≈ ${rain.group} 个光子）`, 12, 96);
+    }
+    // 落下计数条
+    const bw = RAIN_W-24, prog = rain.K ? Math.min(1, landed/rain.K) : 0;
+    rg.strokeStyle='#262c36'; rg.strokeRect(12, 110, bw, 8);
+    rg.fillStyle='#4cc9f0'; rg.fillRect(12, 110, bw*prog, 8);
+    rg.fillStyle='#66707e'; rg.font='11px sans-serif';
+    rg.fillText('光子逐个到达 —— 计数过程本身就是噪声的来源', 12, 134);
+  }
+}
+
+/* ---------------- SNR 曲线 ---------------- */
+function snrDb(N){ return 20*Math.log10(N/Math.sqrt(N + P.rn*P.rn)); }
+function drawPlot(){
+  pg.fillStyle='#0b0d11'; pg.fillRect(0,0,PLOT_W,PLOT_H);
+  const mL=34, mR=8, mT=10, mB=22, iw=PLOT_W-mL-mR, ih=PLOT_H-mT-mB;
+  const X = N => mL + (Math.log10(Math.max(1,N))/Math.log10(FULLWELL))*iw;
+  const Y = db => mT + ih - (db/70)*ih;   // 0..70 dB
+  pg.strokeStyle='#232a34'; pg.lineWidth=1;
+  pg.strokeRect(mL, mT, iw, ih);
+  pg.fillStyle='#66707e'; pg.font='10px sans-serif'; pg.textAlign='center';
+  for(const db of [0,10,20,30,40,50,60,70]){
+    pg.fillText(db, mL-14, Y(db)+3);
+    if(db){ pg.strokeStyle='#1a202a'; pg.beginPath(); pg.moveTo(mL,Y(db)); pg.lineTo(mL+iw,Y(db)); pg.stroke(); }
+  }
+  for(const N of [10,100,1000]){
+    pg.fillText(N+'e⁻', X(N), PLOT_H-8);
+  }
+  const line = (f, col, w) => {
+    pg.strokeStyle=col; pg.lineWidth=w; pg.beginPath();
+    for(let j=0;j<=100;j++){
+      const N = Math.pow(10, j/100*Math.log10(FULLWELL));
+      const y = Y(f(N));
+      j? pg.lineTo(X(N),y) : pg.moveTo(X(N),y);
+    }
+    pg.stroke();
+  };
+  line(N => 10*Math.log10(N), '#3a4450', 1);          // 散粒噪声极限 10logN
+  line(N => snrDb(N), '#4cc9f0', 2);                   // 含读出噪声
+  // 实测点
+  for(let i=0;i<PATCHES;i++){
+    const s = stats[i];
+    if(s.mean > 0){
+      pg.fillStyle = i===selP ? '#ffd166' : '#7ae582';
+      pg.beginPath(); pg.arc(X(s.mean), Y(20*Math.log10(s.mean/s.sd)), i===selP?4:2.5, 0, 7); pg.fill();
+    }
+  }
+  pg.fillStyle='#9aa3b2'; pg.font='10.5px sans-serif'; pg.textAlign='left';
+  pg.fillText('— 含读出噪声 SNR', mL+6, mT+12);
+  pg.fillStyle='#66707e';
+  pg.fillText('— 散粒噪声极限 10·log₁₀N', mL+6, mT+26);
+}
+
+/* ---------------- 表格 ---------------- */
+function drawTable(){
+  const tb = $('tbl').querySelector('tbody');
+  const g = GAINS[P.g];
+  let html = '';
+  for(let i=0;i<PATCHES;i++){
+    const s = stats[i];
+    const dnIdeal = Math.min(255, Math.round(Ntheo(i)*g*KDN));
+    const sw = `background:rgb(${dnIdeal},${dnIdeal},${dnIdeal})`;
+    html += `<tr class="${i===selP?'sel':''}">
+      <td><span class="sw" style="${sw};border:1px solid #262c36"></span>灰阶 ${i+1}</td>
+      <td>${(refl(i)*100).toFixed(1)}%</td>
+      <td>${Ntheo(i).toFixed(0)} e⁻</td>
+      <td>${Math.sqrt(Ntheo(i)+P.rn*P.rn).toFixed(1)} e⁻</td>
+      <td>${s.sd.toFixed(1)} e⁻</td>
+      <td>${s.mean>0 ? (20*Math.log10(s.mean/s.sd)).toFixed(1)+' dB' : '—'}</td>
+      <td>${(s.clip*100).toFixed(0)}%</td></tr>`;
+  }
+  tb.innerHTML = html;
+  $('summary').innerHTML =
+    `<span class="kv">满阱 <b>${FULLWELL} e⁻</b></span>` +
+    `<span class="kv">动态范围 DR = 20·log₁₀(满阱/σr) = <b>${(20*Math.log10(FULLWELL/P.rn)).toFixed(1)} dB</b></span>` +
+    `<span class="kv">选中灰阶 SNR（理论）= <b>${snrDb(Ntheo(selP)).toFixed(1)} dB</b></span>` +
+    `<span class="kv">增益 ×${g} <b>只提亮、不改善 SNR</b></span>`;
+}
+
+/* ---------------- 控件 ---------------- */
+function syncLabels(){
+  $('LxV').textContent=P.L; $('tV').textContent=P.t.toFixed(1);
+  $('gV').textContent=GAINS[P.g]; $('rnV').textContent=P.rn;
+}
+$('Lx').oninput = e => { P.L=+e.target.value; syncLabels(); capture(); };
+$('t').oninput  = e => { P.t=+e.target.value; syncLabels(); capture(); };
+$('g').oninput  = e => { P.g=+e.target.value; syncLabels(); capture(); };
+$('rn').oninput = e => { P.rn=+e.target.value; syncLabels(); capture(); };
+$('capBtn').onclick = () => capture();
+$('ideal').onchange = () => capture();
+syncLabels();
+
+/* 连续预览：定时重拍 */
+setInterval(() => { if($('auto').checked && !document.hidden) capture(); }, 1400);
+
+/* ---------------- 主循环（光子雨动画） ---------------- */
+function loop(now){
+  drawRain(now);
+  requestAnimationFrame(loop);
+}
+capture();
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

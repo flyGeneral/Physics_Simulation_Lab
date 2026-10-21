@@ -1,0 +1,16 @@
+{
+  "name": "physics-simulation-lab",
+  "version": "0.1.0",
+  "private": true,
+  "description": "物理与感知实验室：物理知识演示 + 感知器件选型评估的学习资料库（文档 + 交互动画 + 参数仿真）",
+  "scripts": {
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.64.1",
+    "vitepress": "^1.6.3",
+    "vue": "^3.5.13"
+  }
+}

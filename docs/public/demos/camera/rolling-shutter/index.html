@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>卷帘快门 vs 全局快门 · 逐行曝光时序演示</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#161a21; --line:#262c36; --txt:#e8eaf0; --dim:#9aa3b2;
+    --cyan:#4cc9f0; --green:#7ae582; --orange:#f4a261; --yellow:#ffd166;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+       font:14px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:14px}
+  header h1{font-size:18px;margin:0 0 2px}
+  header .sub{color:var(--dim);font-size:12.5px;margin:0 0 12px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:12px}
+  .row{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}
+  .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{background:transparent;color:var(--dim);border:0;padding:6px 14px;cursor:pointer;font-size:13px}
+  .seg button.on{background:var(--cyan);color:#08222c;font-weight:600}
+  label.sl{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--dim)}
+  label.sl b{color:var(--txt);font-weight:600;font-size:12.5px}
+  input[type=range]{width:150px;accent-color:var(--cyan)}
+  button.act{background:#1d232e;border:1px solid var(--line);color:var(--txt);border-radius:8px;
+             padding:6px 12px;cursor:pointer;font-size:13px}
+  button.act:hover{border-color:var(--cyan);color:var(--cyan)}
+  button.act.flash{border-color:var(--yellow);color:var(--yellow)}
+  button.act.flash:hover{background:rgba(255,209,102,.12)}
+  .views{display:flex;gap:12px;flex-wrap:wrap}
+  .view{flex:1;min-width:320px}
+  .view-title{font-size:12.5px;color:var(--dim);margin:0 0 6px}
+  canvas{display:block;width:100%;border-radius:8px;border:1px solid var(--line);background:#0b0d11}
+  .chart-wrap{margin-top:12px}
+  .readout{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--dim);padding:9px 2px 0}
+  .readout b{color:var(--txt)}
+  .note{color:var(--dim);font-size:12px;margin:10px 0 0}
+  .legend{display:flex;gap:14px;font-size:12px;color:var(--dim);margin-top:9px;flex-wrap:wrap}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+</style>
+</head>
+<body>
+<header>
+  <h1>卷帘快门 vs 全局快门</h1>
+  <p class="sub">左：世界本来的样子 ｜ 右：sensor 逐行记录到的画面 ｜ 下：逐行曝光时序图。切换模式、调转速、触发闪光灯，看果冻畸变与闪光带如何产生。</p>
+</header>
+
+<div class="panel">
+  <div class="row">
+    <div class="seg" id="modeSeg">
+      <button data-mode="rolling" class="on">卷帘快门</button>
+      <button data-mode="global">全局快门</button>
+    </div>
+    <label class="sl">转速 <b><span id="rpmV">600</span> rpm</b>
+      <input type="range" id="rpm" min="0" max="2400" step="50" value="600"></label>
+    <label class="sl">曝光时间 <b><span id="expV">5</span> ms</b>
+      <input type="range" id="texp" min="0.5" max="20" step="0.5" value="5"></label>
+    <label class="sl">读出时间 <b><span id="readV">25</span> ms</b>
+      <input type="range" id="tread" min="2" max="33" step="1" value="25" ></label>
+    <button class="act" id="playBtn">⏸ 暂停</button>
+    <button class="act" id="stepBtn">⏭ 单步 +1ms</button>
+    <button class="act" id="resetBtn">↺ 重置</button>
+    <button class="act flash" id="flashBtn">⚡ 闪光灯</button>
+  </div>
+  <div class="legend">
+    <span><i style="background:var(--orange)"></i>卷帘曝光窗口</span>
+    <span><i style="background:var(--green)"></i>全局曝光窗口</span>
+    <span><i style="background:var(--yellow)"></i>闪光</span>
+    <span><i style="background:var(--cyan)"></i>当前正在曝光的行</span>
+  </div>
+</div>
+
+<div class="views">
+  <div class="view">
+    <div class="view-title">真实视角（世界本来的样子）</div>
+    <canvas id="world"></canvas>
+  </div>
+  <div class="view">
+    <div class="view-title">相机成像（sensor 逐行记录到的画面）</div>
+    <canvas id="cam"></canvas>
+  </div>
+</div>
+
+<div class="chart-wrap">
+  <div class="view-title">逐行曝光时序（横轴：时间；纵轴：画面行号 顶行 → 底行）</div>
+  <canvas id="chart"></canvas>
+</div>
+
+<div class="readout" id="readout"></div>
+<p class="note">说明：画面按 60 个横条带逐带渲染，每带取该行<b>曝光中点时刻</b>的叶片角度（运动模糊未模拟）；帧率固定 30 fps。「相机成像」里上下两半来自不同帧的瞬间，就是卷帘快门逐行扫描的「撕裂」。</p>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+
+/* ---------------- 参数与状态 ---------------- */
+const cfg = { mode:'rolling', rpm:600, tExp:5, tRead:25, fps:30 };
+const FRAME_T = 1000 / cfg.fps;   // 帧周期 33.3ms
+const BANDS = 60;                 // 画面条带数（行）
+const FLASH_MS = 0.6;             // 闪光持续时间
+let simT = 0, playing = true, flashT = -1;
+
+const capA  = new Float64Array(BANDS); // 每带捕获到的叶片角度
+const capF  = new Float64Array(BANDS); // 每带捕获到的闪光亮度 0..1
+const capOk = new Uint8Array(BANDS);   // 是否已捕获
+let flashStat = { t:-1, hits:0 };      // 本次闪光的峰值命中行数
+
+const omega   = () => cfg.rpm * 2*Math.PI / 60000;          // rad/ms
+const rowStart= (k,i) => k*FRAME_T + (cfg.mode==='rolling' ? (i/BANDS)*cfg.tRead : 0);
+const rowMid  = (k,i) => rowStart(k,i) + cfg.tExp/2;
+const rowEnd  = (k,i) => rowStart(k,i) + cfg.tExp;
+
+/* ---------------- 控件 ---------------- */
+function syncLabels(){ $('rpmV').textContent=cfg.rpm; $('expV').textContent=cfg.tExp; $('readV').textContent=cfg.tRead; }
+$('rpm').oninput  = e => { cfg.rpm  = +e.target.value; syncLabels(); };
+$('texp').oninput = e => { cfg.tExp = +e.target.value; syncLabels(); };
+$('tread').oninput= e => { cfg.tRead= +e.target.value; syncLabels(); };
+$('modeSeg').querySelectorAll('button').forEach(b => b.onclick = () => {
+  cfg.mode = b.dataset.mode;
+  $('modeSeg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+  capOk.fill(0); capF.fill(0);
+});
+$('playBtn').onclick = () => { playing = !playing; $('playBtn').textContent = playing ? '⏸ 暂停' : '▶ 播放'; };
+$('stepBtn').onclick = () => { playing = false; $('playBtn').textContent = '▶ 播放'; simT += 1; };
+$('resetBtn').onclick= () => { simT = 0; flashT = -1; capOk.fill(0); capF.fill(0); };
+$('flashBtn').onclick= () => { flashT = simT; };
+syncLabels();
+
+/* ---------------- 画布 ---------------- */
+const worldC = $('world'), camC = $('cam'), chartC = $('chart');
+const VIEW_W = 460, VIEW_H = 310, CH_W = 940, CH_H = 200;
+function setup(c, w, h){
+  const d = window.devicePixelRatio || 1;
+  c.width = w*d; c.height = h*d;
+  c.getContext('2d').setTransform(d,0,0,d,0,0);
+}
+setup(worldC, VIEW_W, VIEW_H); setup(camC, VIEW_W, VIEW_H); setup(chartC, CH_W, CH_H);
+const wg = worldC.getContext('2d'), cg = camC.getContext('2d'), hg = chartC.getContext('2d');
+
+/* ---------------- 场景绘制（真实世界 + 静止参照物） ---------------- */
+function drawScene(g, theta, flashGlow){
+  const W=VIEW_W, H=VIEW_H, cx=W/2, cy=H/2, R=H*0.42;
+  g.fillStyle = '#0b0d11'; g.fillRect(0,0,W,H);
+  g.strokeStyle = '#1c222c'; g.lineWidth = 1;              // 静止网格
+  for(let x=14;x<W;x+=28){ g.beginPath(); g.moveTo(x,0); g.lineTo(x,H); g.stroke(); }
+  for(let y=14;y<H;y+=28){ g.beginPath(); g.moveTo(0,y); g.lineTo(W,y); g.stroke(); }
+  g.strokeStyle='#3a4450'; g.setLineDash([4,5]);           // 静止参考圆环
+  g.beginPath(); g.arc(cx,cy,R,0,7); g.stroke();
+  g.beginPath(); g.arc(cx,cy,R*0.55,0,7); g.stroke();
+  g.setLineDash([]);
+  g.save(); g.translate(cx,cy); g.rotate(theta);           // 三叶风扇
+  for(let b=0;b<3;b++){
+    g.save(); g.rotate(b*2*Math.PI/3);
+    const grd = g.createLinearGradient(0,0,R*0.92,0);
+    grd.addColorStop(0,'rgba(130,205,255,0.95)');
+    grd.addColorStop(1,'rgba(80,140,220,0.5)');
+    g.fillStyle = grd;
+    g.beginPath();
+    g.moveTo(9,-5);
+    g.quadraticCurveTo(R*0.5,-17, R*0.92,-4);
+    g.quadraticCurveTo(R*0.5, 9, 9, 6);
+    g.closePath(); g.fill();
+    g.restore();
+  }
+  g.fillStyle='#2b3340'; g.beginPath(); g.arc(0,0,13,0,7); g.fill();
+  g.strokeStyle='#46536a'; g.beginPath(); g.arc(0,0,13,0,7); g.stroke();
+  g.restore();
+  if(flashGlow > 0){                                       // 闪光光晕
+    const rg = g.createRadialGradient(cx,cy,0,cx,cy,R*1.9);
+    rg.addColorStop(0,`rgba(255,240,200,${0.85*flashGlow})`);
+    rg.addColorStop(1,'rgba(255,240,200,0)');
+    g.fillStyle = rg; g.fillRect(0,0,W,H);
+  }
+}
+
+/* ---------------- 采样捕获 ---------------- */
+function flashOverlap(s, e){
+  if(flashT < 0) return 0;
+  const ov = Math.min(e, flashT+FLASH_MS) - Math.max(s, flashT);
+  return Math.max(0, Math.min(1, ov/FLASH_MS));
+}
+function capture(){
+  const kNow = Math.floor(simT/FRAME_T) + 1;
+  for(let i=0;i<BANDS;i++){
+    for(let k=kNow; k>=kNow-2; k--){
+      if(k >= 0 && rowEnd(k,i) <= simT){
+        capA[i]  = omega() * rowMid(k,i);
+        capF[i]  = flashOverlap(rowStart(k,i), rowEnd(k,i));
+        capOk[i] = 1;
+        break;
+      }
+    }
+  }
+  // 闪光带只持续一帧：在闪光所属帧内记录峰值命中数，供读数持续显示
+  if(flashT !== flashStat.t) flashStat = { t: flashT, hits: 0 };
+  if(flashT >= 0){
+    let h = 0; for(let i=0;i<BANDS;i++) if(capF[i] > 0.01) h++;
+    if(h > flashStat.hits) flashStat.hits = h;
+  }
+}
+
+/* ---------------- 相机成像渲染 ---------------- */
+function drawCam(){
+  const bh = VIEW_H/BANDS;
+  for(let i=0;i<BANDS;i++){
+    const y0 = i*bh;
+    cg.save();
+    cg.beginPath(); cg.rect(0, y0, VIEW_W, bh+0.6); cg.clip();
+    if(!capOk[i]){
+      cg.fillStyle = '#090a0d'; cg.fillRect(0,y0,VIEW_W,bh+0.6);
+    }else{
+      drawScene(cg, capA[i], 0);
+      if(capF[i] > 0){
+        cg.fillStyle = `rgba(255,244,214,${0.25 + 0.45*capF[i]})`;
+        cg.fillRect(0,y0,VIEW_W,bh+0.6);
+      }
+    }
+    cg.restore();
+  }
+  // 正在曝光的行（扫描位置指示）
+  const k = Math.floor(simT/FRAME_T);
+  if(k >= 0){
+    if(cfg.mode === 'rolling'){
+      for(let i=0;i<BANDS;i++){
+        const s = rowStart(k,i), e = rowEnd(k,i);
+        if(simT >= s && simT < e){
+          const y0 = i*bh;
+          cg.fillStyle = 'rgba(76,201,240,0.22)';
+          cg.fillRect(0,y0,VIEW_W,bh+0.6);
+          cg.fillStyle = 'rgba(76,201,240,0.9)';
+          cg.fillRect(0,y0,VIEW_W,1.5);
+        }
+      }
+    }else if(simT >= rowStart(k,0) && simT < rowEnd(k,0)){
+      cg.strokeStyle = 'rgba(76,201,240,0.9)'; cg.lineWidth = 2;
+      cg.strokeRect(1,1,VIEW_W-2,VIEW_H-2);
+    }
+  }
+}
+
+/* ---------------- 时序图渲染 ---------------- */
+const WIN = 120; // 可见时间窗（ms）
+function drawChart(){
+  const W=CH_W, H=CH_H, padL=44, padR=8, padT=8, padB=20;
+  const iw = W-padL-padR, ih = H-padT-padB;
+  const X = t => padL + ((t-(simT-WIN))/WIN)*iw;
+  const Y = i => padT + (i/BANDS)*ih;
+  hg.fillStyle = '#0b0d11'; hg.fillRect(0,0,W,H);
+  // 行轴
+  hg.strokeStyle = '#232a34'; hg.lineWidth = 1;
+  hg.beginPath(); hg.moveTo(padL,padT); hg.lineTo(padL,padT+ih); hg.stroke();
+  hg.fillStyle = '#9aa3b2'; hg.font = '11px sans-serif'; hg.textAlign = 'right';
+  hg.fillText('顶行', padL-6, padT+8);
+  hg.fillText('中行', padL-6, padT+ih/2+4);
+  hg.fillText('底行', padL-6, padT+ih);
+  // 帧刻度
+  hg.textAlign = 'center';
+  const k0 = Math.floor((simT-WIN)/FRAME_T)-1, k1 = Math.floor(simT/FRAME_T)+1;
+  for(let k=k0;k<=k1;k++){
+    const x = X(k*FRAME_T);
+    if(x < padL || x > W-padR) continue;
+    hg.strokeStyle = '#1a202a';
+    hg.beginPath(); hg.moveTo(x,padT); hg.lineTo(x,padT+ih); hg.stroke();
+    hg.fillStyle = '#66707e';
+    hg.fillText('帧'+(k+1), x, H-6);
+  }
+  // 曝光窗口
+  const col = cfg.mode==='rolling' ? '244,162,97' : '122,229,130';
+  const CB = 30; // 图上画的条带数
+  for(let k=k0;k<=k1;k++){
+    if(cfg.mode === 'global'){
+      const x0 = X(k*FRAME_T), x1 = X(k*FRAME_T+cfg.tExp);
+      hg.fillStyle = `rgba(${col},0.4)`;
+      hg.fillRect(x0, padT, Math.max(1.5,x1-x0), ih);
+    }else{
+      const bh = ih/CB + 0.6;
+      for(let b=0;b<CB;b++){
+        const s = k*FRAME_T + (b/CB)*cfg.tRead;
+        const x0 = X(s), x1 = X(s+cfg.tExp);
+        hg.fillStyle = `rgba(${col},0.55)`;
+        hg.fillRect(x0, padT+(b/CB)*ih, Math.max(1.2,x1-x0), bh);
+      }
+    }
+  }
+  // 闪光
+  if(flashT >= 0){
+    const x = X(flashT);
+    if(x > padL && x < W-padR){
+      hg.strokeStyle = 'rgba(255,209,102,0.95)'; hg.lineWidth = 2;
+      hg.beginPath(); hg.moveTo(x,padT); hg.lineTo(x,padT+ih); hg.stroke();
+      hg.fillStyle = '#ffd166'; hg.textAlign = 'center'; hg.font = '12px sans-serif';
+      hg.fillText('⚡闪光', x, padT+14);
+    }
+  }
+  // 当前时刻
+  hg.strokeStyle = 'rgba(232,234,240,0.85)'; hg.lineWidth = 1.5;
+  hg.beginPath(); hg.moveTo(X(simT),padT); hg.lineTo(X(simT),padT+ih); hg.stroke();
+  hg.fillStyle = '#e8eaf0'; hg.textAlign = 'left'; hg.font = '11px sans-serif';
+  hg.fillText('现在', Math.min(X(simT)+3, W-30), padT+ih-4);
+  // 时间轴
+  hg.strokeStyle = '#232a34';
+  hg.beginPath(); hg.moveTo(padL,padT+ih); hg.lineTo(W-padR,padT+ih); hg.stroke();
+}
+
+/* ---------------- 读数 ---------------- */
+function drawReadout(){
+  const dt = cfg.mode==='rolling' ? cfg.tRead : 0;
+  const skew = omega()*dt * 180/Math.PI;
+  const k = Math.floor(simT/FRAME_T);
+  let flashInfo = '';
+  if(flashT >= 0){
+    if(flashStat.hits > 0)
+      flashInfo = `<span class="kv">⚡ 命中 <b>${flashStat.hits}/${BANDS}</b> 行（亮带只持续一帧，可暂停/单步观察）</span>`;
+    else if(simT > flashT + 2*FRAME_T)
+      flashInfo = `<span class="kv">⚡ <b>未命中任何行</b>——闪光落在帧间空隙，再点一次试试</span>`;
+  }
+  $('readout').innerHTML =
+    `<span class="kv">模式 <b>${cfg.mode==='rolling'?'卷帘快门':'全局快门'}</b></span>` +
+    `<span class="kv">底行比顶行晚采样 <b>${dt.toFixed(1)} ms</b></span>` +
+    `<span class="kv">叶片剪切角 Δθ = ω·Δt <b>${skew.toFixed(1)}°</b></span>` +
+    `<span class="kv">当前 <b>帧${k+1}</b>（t = ${simT.toFixed(1)} ms）</span>` +
+    flashInfo;
+}
+
+/* ---------------- 主循环 ---------------- */
+let last = performance.now();
+function loop(now){
+  const dt = Math.min(50, now-last); last = now;
+  if(playing) simT += dt;
+  capture();
+  const flashOn = flashT>=0 && simT>=flashT && simT<flashT+FLASH_MS ? 1 : 0;
+  drawScene(wg, omega()*simT, flashOn);
+  drawCam();
+  drawChart();
+  drawReadout();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

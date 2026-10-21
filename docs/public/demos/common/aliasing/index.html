@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>采样与混叠仿真台 · 车轮错觉（camera）与声波混叠（mic）</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#161a21; --line:#262c36; --txt:#e8eaf0; --dim:#9aa3b2;
+    --cyan:#4cc9f0; --green:#7ae582; --orange:#f4a261; --yellow:#ffd166; --red:#ef6b73;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+       font:14px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:14px}
+  header h1{font-size:18px;margin:0 0 2px}
+  header .sub{color:var(--dim);font-size:12.5px;margin:0 0 12px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:12px}
+  .row{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end}
+  .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{background:transparent;color:var(--dim);border:0;padding:6px 14px;cursor:pointer;font-size:13px}
+  .seg button.on{background:var(--cyan);color:#08222c;font-weight:600}
+  label.sl{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--dim)}
+  label.sl b{color:var(--txt);font-weight:600;font-size:12.5px}
+  input[type=range]{width:160px;accent-color:var(--cyan)}
+  label.ck{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--dim);cursor:pointer}
+  .views{display:flex;gap:12px;flex-wrap:wrap}
+  .view{flex:1;min-width:320px}
+  .view-title{font-size:12.5px;color:var(--dim);margin:0 0 6px}
+  canvas{display:block;width:100%;border-radius:8px;border:1px solid var(--line);background:#0b0d11}
+  .readout{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--dim);padding:9px 2px 0}
+  .readout b{color:var(--txt)}
+  .warn b{color:var(--red)}
+  .note{color:var(--dim);font-size:12px;margin:10px 0 0}
+  .formula{font-family:ui-monospace,Menlo,monospace;color:var(--cyan);background:#0b0d11;
+           border:1px solid var(--line);border-radius:6px;padding:6px 10px;font-size:12.5px;margin:0 0 12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>采样与混叠仿真台</h1>
+  <p class="sub">相机按帧率对运动采样、麦克风按采样率对声波采样——背后是同一个 Nyquist 定理。切换两种模式，看同一个公式的两张脸。</p>
+</header>
+<p class="formula">f<sub>alias</sub> = | f − round(f / f<sub>s</sub>) · f<sub>s</sub> |　　采样只忠实保留 f &lt; f<sub>s</sub>/2 的成分</p>
+
+<div class="panel">
+  <div class="row">
+    <div class="seg" id="modeSeg">
+      <button data-mode="wheel" class="on">🎡 轮子模式 · camera 帧采样</button>
+      <button data-mode="wave">〰 声波模式 · mic 采样</button>
+    </div>
+    <span id="cWheel" class="row" style="gap:16px">
+      <label class="sl">转速 <b><span id="rpsV">9</span> 转/秒</b>
+        <input type="range" id="rps" min="0.2" max="20" step="0.1" value="9"></label>
+      <label class="sl">相机帧率 f<sub>s</sub> <b><span id="fpsV">12</span> fps</b>
+        <input type="range" id="fps" min="2" max="120" step="1" value="12"></label>
+    </span>
+    <span id="cWave" class="row" style="gap:16px;display:none">
+      <label class="sl">信号频率 f <b><span id="fV">5</span> kHz</b>
+        <input type="range" id="f" min="0.2" max="10" step="0.1" value="5"></label>
+      <label class="sl">采样率 f<sub>s</sub> <b><span id="fsV">8</span> kHz</b>
+        <input type="range" id="fs" min="1" max="16" step="0.1" value="8"></label>
+      <label class="ck"><input type="checkbox" id="aaf">抗混叠滤波（采样前低通）</label>
+    </span>
+    <button class="act" id="pauseBtn" style="display:none">⏸</button>
+  </div>
+</div>
+
+<div id="vWheel">
+  <div class="views">
+    <div class="view">
+      <div class="view-title">真实连续旋转（红色标记辐条为准）</div>
+      <canvas id="wr"></canvas>
+    </div>
+    <div class="view">
+      <div class="view-title">相机看到的（帧采样 + 保持）</div>
+      <canvas id="wc"></canvas>
+    </div>
+  </div>
+  <div style="margin-top:12px">
+    <div class="view-title">旋转相位（灰：真实相位 mod 1；橙：视觉相位 = 混叠后的慢转）</div>
+    <canvas id="wch"></canvas>
+  </div>
+</div>
+
+<div id="vWave" style="display:none">
+  <div class="view-title">连续声波（青）→ 采样点（橙点）→ 重建信号（橙线，即数字域「听到」的）</div>
+  <canvas id="wv"></canvas>
+</div>
+
+<div class="readout" id="readout"></div>
+<p class="note">轮子模式：视觉转速 = 转速 − round(转速/帧率)·帧率；超过 Nyquist（帧率/2）后正转变倒转。声波模式：打开抗混叠滤波后，高于 Nyquist 的成分在采样前被压低——假波消失，但那部分信息也没了。</p>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+
+/* ---------------- 参数 ---------------- */
+let mode = 'wheel';
+const W = { rps:9, fps:12 };            // 轮子：转速(转/秒)、帧率
+const V = { f:5, fs:8, aaf:false };     // 声波：kHz
+let simT = 0, last = performance.now();
+let lastN = -1;                          // 轮子：已处理到的采样序号
+let thetaCam = 0;                        // 相机保持的角度
+const samples = [];                      // 采样历史 {t, th}
+
+/* ---------------- 画布 ---------------- */
+const wrC=$('wr'), wcC=$('wc'), wchC=$('wch'), wvC=$('wv');
+const WW=340, WH=250, WCH_W=940, WCH_H=150, WV_W=940, WV_H=250;
+function setup(c,w,h){
+  const d=window.devicePixelRatio||1;
+  c.width=w*d; c.height=h*d; c.getContext('2d').setTransform(d,0,0,d,0,0);
+}
+setup(wrC,WW,WH); setup(wcC,WW,WH); setup(wchC,WCH_W,WCH_H); setup(wvC,WV_W,WV_H);
+const wr=wrC.getContext('2d'), wc=wcC.getContext('2d'),
+      wch=wchC.getContext('2d'), wv=wvC.getContext('2d');
+
+/* ---------------- 控件 ---------------- */
+$('modeSeg').querySelectorAll('button').forEach(b => b.onclick = () => {
+  mode = b.dataset.mode;
+  $('modeSeg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x===b));
+  $('vWheel').style.display = mode==='wheel' ? '' : 'none';
+  $('vWave').style.display  = mode==='wave'  ? '' : 'none';
+  $('cWheel').style.display = mode==='wheel' ? '' : 'none';
+  $('cWave').style.display  = mode==='wave'  ? '' : 'none';
+});
+function syncLabels(){
+  $('rpsV').textContent=W.rps.toFixed(1); $('fpsV').textContent=W.fps;
+  $('fV').textContent=V.f.toFixed(1); $('fsV').textContent=V.fs.toFixed(1);
+}
+$('rps').oninput = e => { W.rps=+e.target.value; syncLabels(); };
+$('fps').oninput = e => { W.fps=+e.target.value; syncLabels(); };
+$('f').oninput   = e => { V.f=+e.target.value;  syncLabels(); };
+$('fs').oninput  = e => { V.fs=+e.target.value; syncLabels(); };
+$('aaf').onchange= e => { V.aaf=e.target.checked; };
+syncLabels();
+
+/* ---------------- 轮子绘制 ---------------- */
+function drawWheel(g, theta, label, sub){
+  g.fillStyle='#0b0d11'; g.fillRect(0,0,WW,WH);
+  const cx=WW/2, cy=WH/2-6, R=WH*0.36;
+  g.strokeStyle='#39424f'; g.lineWidth=3;
+  g.beginPath(); g.arc(cx,cy,R,0,7); g.stroke();
+  g.save(); g.translate(cx,cy); g.rotate(theta);
+  for(let s=0;s<8;s++){
+    const a = s*Math.PI/4;
+    g.strokeStyle = s===0 ? '#ef6b73' : '#4a5a70';
+    g.lineWidth   = s===0 ? 3.5 : 2;
+    g.beginPath(); g.moveTo(Math.cos(a)*10, Math.sin(a)*10);
+    g.lineTo(Math.cos(a)*R*0.94, Math.sin(a)*R*0.94); g.stroke();
+  }
+  g.fillStyle='#2b3340'; g.beginPath(); g.arc(0,0,11,0,7); g.fill();
+  g.strokeStyle='#46536a'; g.beginPath(); g.arc(0,0,11,0,7); g.stroke();
+  g.restore();
+  g.fillStyle='#e8eaf0'; g.font='13px sans-serif'; g.textAlign='center';
+  g.fillText(label, cx, WH-26);
+  g.fillStyle='#9aa3b2'; g.font='11.5px sans-serif';
+  g.fillText(sub, cx, WH-9);
+}
+
+/* ---------------- 轮子相位图 ---------------- */
+function drawWheelChart(){
+  const win = 2000;
+  const mL=44, mR=8, mT=8, mB=20, iw=WCH_W-mL-mR, ih=WCH_H-mT-mB;
+  const X = t => mL + ((t-(simT-win))/win)*iw;
+  const Y = ph => mT + (1-ph)*ih;
+  wch.fillStyle='#0b0d11'; wch.fillRect(0,0,WCH_W,WCH_H);
+  wch.strokeStyle='#232a34';
+  wch.beginPath(); wch.moveTo(mL,mT); wch.lineTo(mL,mT+ih);
+  wch.moveTo(mL,mT+ih); wch.lineTo(mL+iw,mT+ih); wch.stroke();
+  wch.fillStyle='#9aa3b2'; wch.font='11px sans-serif'; wch.textAlign='right';
+  wch.fillText('1转', mL-6, mT+9); wch.fillText('0', mL-6, mT+ih);
+  // 真实相位（密锯齿）
+  wch.strokeStyle='#3a4450'; wch.lineWidth=1; wch.beginPath();
+  for(let x=0;x<=iw;x+=2){
+    const t = simT-win + (x/iw)*win;
+    const ph = ((W.rps*t/1000)%1+1)%1;
+    x? wch.lineTo(mL+x, Y(ph)) : wch.moveTo(mL+x, Y(ph));
+  }
+  wch.stroke();
+  // 视觉相位（混叠后的慢转）
+  const k = Math.round(W.rps/W.fps);
+  const va = W.rps - k*W.fps;               // 视觉转速（可为负）
+  wch.strokeStyle='#f4a261'; wch.lineWidth=2; wch.beginPath();
+  for(let x=0;x<=iw;x+=2){
+    const t = simT-win + (x/iw)*win;
+    const ph = ((va*t/1000)%1+1)%1;
+    x? wch.lineTo(mL+x, Y(ph)) : wch.moveTo(mL+x, Y(ph));
+  }
+  wch.stroke();
+  // 采样标记
+  wch.fillStyle='#ffd166';
+  const Ts = 1000/W.fps;
+  for(let n=Math.ceil((simT-win)/Ts); n*Ts<=simT; n++){
+    const t=n*Ts, x=X(t);
+    if(x>=mL){
+      const ph=((W.rps*t/1000)%1+1)%1;
+      wch.beginPath(); wch.arc(x, Y(ph), 2.6, 0, 7); wch.fill();
+    }
+  }
+  wch.fillStyle='rgba(11,13,17,0.8)'; wch.fillRect(mL+iw-206, mT+2, 198, 16);
+  wch.fillStyle='#66707e'; wch.font='10.5px sans-serif'; wch.textAlign='right';
+  wch.fillText('橙线：视觉上「慢转/倒转」的相位', mL+iw-8, mT+14);
+}
+
+/* ---------------- 声波绘制 ---------------- */
+function atten(){                            // 抗混叠滤波器的幅度响应（4阶，fc=0.4fs）
+  if(!V.aaf) return 1;
+  const r = V.f/(0.4*V.fs);
+  return 1/(1+Math.pow(r,4));
+}
+function drawWave(){
+  const win = 20;                            // 显示 20ms
+  const mL=44, mR=8, mT=12, mB=22, iw=WV_W-mL-mR, ih=WV_H-mT-mB;
+  const X = t => mL + ((t-(simT-win))/win)*iw;
+  const Y = v => mT + ih/2 - v*(ih/2*0.86);
+  const A = atten();
+  wv.fillStyle='#0b0d11'; wv.fillRect(0,0,WV_W,WV_H);
+  wv.strokeStyle='#232a34';
+  wv.beginPath(); wv.moveTo(mL,Y(0)); wv.lineTo(mL+iw,Y(0)); wv.stroke();
+  wv.fillStyle='#9aa3b2'; wv.font='11px sans-serif'; wv.textAlign='right';
+  wv.fillText('+A', mL-6, Y(1)+4); wv.fillText('0', mL-6, Y(0)+4); wv.fillText('−A', mL-6, Y(-1)+4);
+  // 原始连续波
+  wv.strokeStyle='#4cc9f0'; wv.lineWidth=1.6; wv.beginPath();
+  for(let x=0;x<=iw;x+=1){
+    const t = simT-win + (x/iw)*win;
+    const v = Math.sin(2*Math.PI*V.f*t);
+    x? wv.lineTo(mL+x, Y(v)) : wv.moveTo(mL+x, Y(v));
+  }
+  wv.stroke();
+  // 滤波后连续波（仅 AAF 开启时）
+  if(V.aaf && A < 0.999){
+    wv.strokeStyle='rgba(244,162,97,0.5)'; wv.setLineDash([5,4]); wv.lineWidth=1.2;
+    wv.beginPath();
+    for(let x=0;x<=iw;x+=1){
+      const t = simT-win + (x/iw)*win;
+      const v = A*Math.sin(2*Math.PI*V.f*t);
+      x? wv.lineTo(mL+x, Y(v)) : wv.moveTo(mL+x, Y(v));
+    }
+    wv.stroke(); wv.setLineDash([]);
+  }
+  // 采样点与重建
+  const Ts = 1000/V.fs;
+  const pts = [];
+  for(let n=Math.ceil((simT-win)/Ts); n*Ts<=simT; n++){
+    const t=n*Ts;
+    pts.push({x:X(t), y:Y(A*Math.sin(2*Math.PI*V.f*t))});
+  }
+  wv.strokeStyle='#f4a261'; wv.lineWidth=2; wv.beginPath();
+  pts.forEach((p,i)=> i? wv.lineTo(p.x,p.y) : wv.moveTo(p.x,p.y));
+  wv.stroke();
+  wv.fillStyle='#ffd166';
+  pts.forEach(p => { wv.beginPath(); wv.arc(p.x,p.y,3,0,7); wv.fill(); });
+}
+
+/* ---------------- 读数 ---------------- */
+function drawReadout(){
+  const el = $('readout');
+  if(mode==='wheel'){
+    const nyq = W.fps/2, k = Math.round(W.rps/W.fps), va = W.rps - k*W.fps;
+    let st, cls='';
+    if(W.rps <= nyq+1e-9){ st = '✔ 正常采样（低于 Nyquist）'; }
+    else if(Math.abs(va) < 0.06){ st='◼ 完全静止（转速≈帧率整数倍）'; cls='warn'; }
+    else if(va < 0){ st=`⚠ 混叠：倒转 ${Math.abs(va).toFixed(1)} 转/秒`; cls='warn'; }
+    else { st=`⚠ 混叠：正转但变慢为 ${va.toFixed(1)} 转/秒`; cls='warn'; }
+    el.innerHTML =
+      `<span>真实转速 <b>${W.rps.toFixed(1)}</b> 转/秒</span>` +
+      `<span>帧率 f<sub>s</sub> = <b>${W.fps}</b> fps</span>` +
+      `<span>Nyquist = f<sub>s</sub>/2 = <b>${nyq.toFixed(1)}</b> 转/秒</span>` +
+      `<span>视觉转速 = ${W.rps.toFixed(1)} − ${k}×${W.fps} = <b>${va.toFixed(1)}</b> 转/秒</span>` +
+      `<span class="${cls}">${st}</span>`;
+  }else{
+    const nyq = V.fs/2;
+    const k = Math.round(V.f/V.fs);
+    const fa = Math.abs(V.f - k*V.fs);
+    const aliased = V.f > nyq+1e-9;
+    const A = atten();
+    el.innerHTML =
+      `<span>信号频率 f = <b>${V.f.toFixed(1)}</b> kHz</span>` +
+      `<span>采样率 f<sub>s</sub> = <b>${V.fs.toFixed(1)}</b> kHz</span>` +
+      `<span>Nyquist = <b>${nyq.toFixed(2)}</b> kHz</span>` +
+      (aliased
+        ? `<span class="warn">⚠ 混叠成 f<sub>alias</sub> = |${V.f.toFixed(1)} − ${k}×${V.fs.toFixed(1)}| = <b>${fa.toFixed(2)} kHz</b> 的假信号</span>`
+        : `<span>✔ 正常采样（f &lt; Nyquist）</span>`) +
+      (V.aaf ? `<span>滤波后幅度 <b>${(A*100).toFixed(0)}%</b>（高于 Nyquist 的成分被抑制）</span>` : '');
+  }
+}
+
+/* ---------------- 主循环 ---------------- */
+function loop(now){
+  const dt = Math.min(50, now-last); last = now;
+  simT += dt;
+  if(mode==='wheel'){
+    // 按绝对时间补采样（帧采样 + 保持）
+    const Ts = 1000/W.fps;
+    const nNow = Math.floor(simT/Ts);
+    if(nNow > lastN){
+      for(let n=lastN+1; n<=nNow; n++){
+        thetaCam = W.rps*2*Math.PI*(n*Ts)/1000;
+        samples.push({t:n*Ts, th:thetaCam});
+        if(samples.length > 3000) samples.shift();
+      }
+      lastN = nNow;
+    }
+    drawWheel(wr, W.rps*2*Math.PI*simT/1000, `真实：${W.rps.toFixed(1)} 转/秒`, '红色标记辐条为基准');
+    const va = W.rps - Math.round(W.rps/W.fps)*W.fps;
+    drawWheel(wc, thetaCam,
+      `视觉：${Math.abs(va)<0.06?'静止':(va<0?'倒转 ':'正转 ')+Math.abs(va).toFixed(1)+' 转/秒'}`,
+      `每 ${W.fps} fps 采一帧，帧间保持`);
+    drawWheelChart();
+  }else{
+    drawWave();
+  }
+  drawReadout();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
