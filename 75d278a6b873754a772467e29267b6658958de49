@@ -1,0 +1,51 @@
+docs/public/demos/mic/cavity-response/index.html
+  54eb2ac978ba0448 1-351
+docs/sensing/mic/index.md
+  54eb2ac978ba0448 24,45
+docs/public/demos/mic/cavity-response/README.md
+  54eb2ac978ba0448 1-6
+docs/public/demos/mic/cavity-pulse/index.html
+  54eb2ac978ba0448 1-323
+docs/.vitepress/theme/DemoEmbed.vue
+  54eb2ac978ba0448 18-22,26,52
+docs/sensing/mic/cavity-response.md
+  54eb2ac978ba0448 1-99
+README.md
+  54eb2ac978ba0448 33,46
+docs/public/demos/mic/cavity-pulse/README.md
+  54eb2ac978ba0448 1-8
+docs/.vitepress/config.mts
+  54eb2ac978ba0448 7,31,67
+scripts/verify-demos.mjs
+  54eb2ac978ba0448 1,50-74
+docs/index.md
+  54eb2ac978ba0448 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.8.1",
+  "base_commit_sha": "75d278a6b873754a772467e29267b6658958de49",
+  "prompts": {
+    "54eb2ac978ba0448": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "754e7ef5-9b23-48a9-b098-d9705e3664fe",
+        "model": "glm-5.3"
+      },
+      "human_author": "chenjinghao <chenjinghao@cvte.com>",
+      "messages": [],
+      "total_additions": 863,
+      "total_deletions": 41,
+      "accepted_lines": 828,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/f274b6a0ebb69d00743cdb6c7e2f5548073f5128e41c048bf84b266f61f1484b",
+      "token_usage": {
+        "input_tokens": 2016905,
+        "output_tokens": 329085,
+        "cache_read_tokens": 26028288,
+        "cache_creation_tokens": 0,
+        "total_cost": null
+      }
+    }
+  }
+}
