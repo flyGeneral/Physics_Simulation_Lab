@@ -90,5 +90,14 @@ const cv7 = await page.$eval('canvas', c => c.width > 0 && c.height > 0)
 assert(cv7, 'demo7 画布已渲染')
 await shot('f7-supermoon')
 
+// ---- demo8: physics/eclipse（日食 · 三维日地月，移植页） ----
+await page.goto(`${BASE}/demos/physics/eclipse/`)
+await page.waitForTimeout(2500)
+const t8 = await page.title()
+assert(/日食/.test(t8), 'demo8 标题加载: ' + t8)
+const cv8 = await page.$eval('canvas', c => c.width > 0 && c.height > 0)
+assert(cv8, 'demo8 画布已渲染')
+await shot('f8-eclipse')
+
 console.log(errors.length ? 'CONSOLE ERRORS:\n' + errors.join('\n') : 'console clean')
 await browser.close()

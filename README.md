@@ -32,7 +32,7 @@ node scripts/verify-demos.mjs
   - [Camera · 帧率与运动采样](docs/sensing/camera/temporal-sampling.md)：运动模糊、漏检、时间混叠
   - [Mic · 选型测试地图](docs/sensing/mic/index.md) / [采样率与混叠](docs/sensing/mic/aliasing.md) / [音腔与高频跌落](docs/sensing/mic/cavity-response.md)
   - [测试方法论](docs/sensing/methodology.md)：观测方案、对比实验、故障复现、数据复盘
-- **物理演示** `docs/physics/` —— 按五大类别编排：自然奇观（[七星连珠](docs/physics/planets.md)、[超级月亮](docs/physics/supermoon.md)）· 物理现象 · 工程智慧 · 科幻设想 · 数学几何（规划中）
+- **物理演示** `docs/physics/` —— 按五大类别编排：自然奇观（[七星连珠](docs/physics/planets.md)、[超级月亮](docs/physics/supermoon.md)、[日食](docs/physics/eclipse.md)）· 物理现象 · 工程智慧 · 科幻设想 · 数学几何（规划中）
 - **创作指南** `docs/guide/authoring.md` —— 如何新增专题 / demo / 栏目，如何移植现成动画
 
 ```text
@@ -44,7 +44,7 @@ docs/
     ├── camera/         #   rolling-shutter / exposure-noise
     ├── common/         #   aliasing（camera 与 mic 共用，数学同源）
     ├── mic/            #   cavity-response（音腔频响）/ cavity-pulse（脉冲对照动画）
-    └── physics/        #   planets / supermoon …（五大类别，按主题逐个扩充）
+    └── physics/        #   planets / supermoon / eclipse …（五大类别，按主题逐个扩充）
 ```
 
 ## 约定
