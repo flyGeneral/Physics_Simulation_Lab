@@ -108,5 +108,14 @@ const cv9 = await page.$eval('canvas', c => c.width > 0 && c.height > 0)
 assert(cv9, 'demo9 画布已渲染')
 await shot('f9-aurora')
 
+// ---- demo10: physics/blackhole（黑洞模拟，移植页） ----
+await page.goto(`${BASE}/demos/physics/blackhole/`)
+await page.waitForTimeout(3000)
+const t10 = await page.title()
+assert(/黑洞/.test(t10), 'demo10 标题加载: ' + t10)
+const cv10 = await page.$eval('canvas', c => c.width > 0 && c.height > 0)
+assert(cv10, 'demo10 画布已渲染')
+await shot('f10-blackhole')
+
 console.log(errors.length ? 'CONSOLE ERRORS:\n' + errors.join('\n') : 'console clean')
 await browser.close()

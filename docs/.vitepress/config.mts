@@ -50,6 +50,10 @@ export default defineConfig({
             { text: '极光', link: '/physics/aurora' },
           ],
         },
+        {
+          text: '物理现象',
+          items: [{ text: '黑洞模拟', link: '/physics/blackhole' }],
+        },
         { text: '数学几何', items: [] },
       ],
       '/sensing/': [

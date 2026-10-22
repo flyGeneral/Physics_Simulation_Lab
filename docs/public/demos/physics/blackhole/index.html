@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#000000">
+<title>黑洞模拟 · Schwarzschild</title>
+<link rel="icon" href="data:,">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; color: #dbe4f5; }
+  #gl { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; cursor: grab; touch-action: none; }
+  #gl.dragging { cursor: grabbing; }
+
+  .card {
+    position: fixed; background: rgba(8, 11, 20, 0.58);
+    border: 1px solid rgba(140, 165, 220, 0.16); border-radius: 14px;
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 6px 30px rgba(0,0,0,0.45);
+  }
+  #title { top: 16px; left: 16px; padding: 10px 16px; user-select: none; }
+  #title h1 { font-size: 15px; font-weight: 600; letter-spacing: 1px; color: #f2f6ff; }
+  #title p { font-size: 11px; color: #8fa2c7; margin-top: 2px; }
+
+  #stats { top: 16px; right: 16px; padding: 8px 12px; font: 11px/1.5 ui-monospace, Menlo, monospace; color: #9db1d8; user-select: none; white-space: pre; }
+
+  #panel { bottom: 16px; left: 16px; width: 252px; padding: 12px 14px 14px; }
+  #panel header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  #panel header span { font-size: 12px; font-weight: 600; color: #c8d6f2; letter-spacing: 1px; }
+  #collapseBtn { background: none; border: 1px solid rgba(140,165,220,.25); color: #9db1d8; border-radius: 6px; width: 22px; height: 22px; cursor: pointer; font-size: 12px; line-height: 1; }
+  #panel .row { display: flex; align-items: center; justify-content: space-between; margin: 9px 0; gap: 8px; }
+  #panel label { font-size: 12px; color: #b7c6e6; white-space: nowrap; }
+  #panel input[type=range] { flex: 1; accent-color: #ff9a3c; height: 14px; cursor: pointer; }
+  #panel .val { font: 11px ui-monospace, Menlo, monospace; color: #ffb066; width: 34px; text-align: right; }
+  #panel select { background: rgba(20,26,44,.9); color: #dbe4f5; border: 1px solid rgba(140,165,220,.25); border-radius: 7px; padding: 3px 6px; font-size: 12px; outline: none; cursor: pointer; }
+  .check { display: flex; align-items: center; gap: 7px; margin: 8px 0; cursor: pointer; font-size: 12px; color: #b7c6e6; }
+  .check input { accent-color: #ff9a3c; width: 14px; height: 14px; cursor: pointer; }
+  .btns { display: flex; gap: 8px; margin-top: 12px; }
+  .btns button { flex: 1; background: rgba(255,154,60,.13); border: 1px solid rgba(255,154,60,.4); color: #ffc48a; border-radius: 8px; padding: 6px 0; font-size: 12px; cursor: pointer; transition: background .15s; }
+  .btns button:hover { background: rgba(255,154,60,.28); }
+  #panel.collapsed .row, #panel.collapsed .check, #panel.collapsed .btns { display: none; }
+
+  #hint { bottom: 18px; right: 18px; padding: 8px 13px; font-size: 11px; color: #93a6cc; user-select: none; transition: opacity 1.2s; pointer-events: none; }
+  #err { position: fixed; inset: 0; display: none; padding: 24px; background: #100505; color: #ff9a9a; font: 12px/1.6 ui-monospace, Menlo, monospace; white-space: pre-wrap; overflow: auto; z-index: 99; }
+  @media (max-width: 640px) { #panel { width: calc(100vw - 32px); } #hint { display: none; } }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div class="card" id="title">
+  <h1>黑洞模拟</h1>
+  <p>史瓦西黑洞 · 引力透镜 · 吸积盘</p>
+</div>
+<div class="card" id="stats">-- FPS</div>
+
+<div class="card" id="panel">
+  <header>
+    <span>渲染设置</span>
+    <button id="collapseBtn" title="收起/展开">–</button>
+  </header>
+
+  <div class="row"><label>画质</label>
+    <select id="quality">
+      <option value="low">流畅</option>
+      <option value="mid" selected>均衡</option>
+      <option value="high">精细</option>
+    </select>
+  </div>
+  <div class="row"><label>曝光</label><input type="range" id="exposure" min="0.4" max="2.6" step="0.05" value="1.2"><span class="val" id="exposureV">1.20</span></div>
+  <div class="row"><label>吸积盘亮度</label><input type="range" id="bright" min="0.1" max="3" step="0.05" value="1"><span class="val" id="brightV">1.00</span></div>
+  <div class="row"><label>时间流速</label><input type="range" id="flow" min="0" max="3" step="0.05" value="1"><span class="val" id="flowV">1.00</span></div>
+  <div class="row"><label>自旋 a/M</label><input type="range" id="spin" min="0" max="0.998" step="0.002" value="0"><span class="val" id="spinV">0.00</span></div>
+
+  <label class="check"><input type="checkbox" id="lensing" checked>引力透镜（时空弯曲）</label>
+  <label class="check"><input type="checkbox" id="doppler" checked>多普勒 + 引力红移</label>
+  <label class="check"><input type="checkbox" id="orbit" checked>自动环绕</label>
+
+  <div class="btns">
+    <button id="pauseBtn">暂停</button>
+    <button id="resetBtn">重置视角</button>
+    <button id="shotBtn">截图</button>
+  </div>
+</div>
+
+<div class="card" id="hint">拖动旋转视角 · 滚轮缩放 · 空格暂停</div>
+<div id="err"></div>
+
+<!-- ======================= 片元着色器 ======================= -->
+<script id="fs" type="x-shader/x-fragment">
+precision highp float;
+precision highp int;
+
+uniform vec2  uRes;
+uniform float uTime;      // 墙钟时间（星闪、抖动）
+uniform float uDiskTime;  // 吸积盘时间（可暂停）
+uniform float uYaw;
+uniform float uPitch;
+uniform float uDist;
+uniform float uDiskBright;
+uniform float uExposure;
+uniform float uDoppler;   // 0/1
+uniform float uLensing;   // 0/1
+uniform float uSpin;      // 克尔自旋 a/M ∈ [0, 0.998]
+uniform int   uSteps;
+
+const float RIN  = 3.0;    // 内边缘 = ISCO = 3 rs（rs = 1 为史瓦西半径）
+const float ROUT = 10.0;   // 外边缘
+
+float hash13(vec3 p3){
+  p3 = fract(p3 * 0.1031);
+  p3 += dot(p3, p3.zyx + 31.32);
+  return fract((p3.x + p3.y) * p3.z);
+}
+float hash12(vec2 p){
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+float vnoise(vec3 p){
+  vec3 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float n000 = hash13(i);
+  float n100 = hash13(i + vec3(1.0, 0.0, 0.0));
+  float n010 = hash13(i + vec3(0.0, 1.0, 0.0));
+  float n110 = hash13(i + vec3(1.0, 1.0, 0.0));
+  float n001 = hash13(i + vec3(0.0, 0.0, 1.0));
+  float n101 = hash13(i + vec3(1.0, 0.0, 1.0));
+  float n011 = hash13(i + vec3(0.0, 1.0, 1.0));
+  float n111 = hash13(i + vec3(1.0, 1.0, 1.0));
+  return mix(
+    mix(mix(n000, n100, f.x), mix(n010, n110, f.x), f.y),
+    mix(mix(n001, n101, f.x), mix(n011, n111, f.x), f.y), f.z);
+}
+float fbm(vec3 p){
+  float a = 0.5, s = 0.0;
+  for (int i = 0; i < 4; i++) {
+    s += a * vnoise(p);
+    p = p * 2.03 + 17.0;
+    a *= 0.5;
+  }
+  return s;
+}
+
+// 黑体辐射近似（T 开尔文 -> RGB）
+vec3 blackbody(float T){
+  T = clamp(T, 1000.0, 40000.0);
+  vec3 c;
+  c.r = 56100000.0 * pow(T, -1.5) + 148.0;
+  c.g = T > 6500.0 ? 35200000.0 * pow(T, -1.5) + 184.0 : 100.04 * log(T) - 623.6;
+  c.b = 194.18 * log(T) - 1448.6;
+  c = clamp(c, 0.0, 255.0) / 255.0;
+  if (T < 2000.0) c *= max(T - 600.0, 0.0) / 1400.0;
+  return max(c, 0.0);
+}
+
+// 背景星空（会被引力透镜弯曲）
+vec3 background(vec3 rd){
+  vec3 col = vec3(0.0);
+  // 银河带 + 星云
+  float band = pow(max(0.0, 1.0 - abs(dot(rd, normalize(vec3(0.22, 1.0, 0.3))))), 3.0);
+  float neb = fbm(rd * 4.0 + 3.7) * fbm(rd * 9.0 - 2.1);
+  col += band * (vec3(0.070, 0.085, 0.150) + vec3(0.28, 0.19, 0.11) * neb * neb);
+  col += pow(max(0.0, neb - 0.30), 2.0) * vec3(0.05, 0.045, 0.12);
+  // 两层星星
+  for (int i = 0; i < 2; i++) {
+    float sc = 55.0 + 85.0 * float(i);
+    vec3 p = rd * sc;
+    vec3 id = floor(p);
+    vec3 f = fract(p) - 0.5;
+    float h = hash13(id);
+    float thr = 0.955 - 0.02 * float(i);
+    if (h > thr) {
+      vec3 off = (vec3(hash13(id + 17.1), hash13(id + 31.7), hash13(id + 47.3)) - 0.5) * 0.7;
+      float d = length(f - off);
+      float br = (h - thr) / (1.0 - thr);
+      br = pow(br, 3.0) * (0.6 + 0.4 * sin(uTime * (1.0 + 3.0 * h) + h * 60.0));
+      float star = exp(-d * d * sc * 0.55);
+      vec3 tint = mix(vec3(1.0, 0.72, 0.5), vec3(0.62, 0.75, 1.0), fract(h * 9.37));
+      col += tint * star * br * 2.4;
+    }
+  }
+  return col;
+}
+
+// 吸积盘：温度廓线 + 开普勒剪切 + 多普勒/引力红移
+// rIn/rOut 由调用方给出（史瓦西: rs 单位; 克尔: M 单位, uSpin>0 时走克尔分支）
+vec3 diskColor(vec3 p, vec3 rd, float r, float rIn, float rOut, out float alpha){
+  // 开普勒角速度 ~ r^-1.5（克尔: Ω = 1/(r^1.5 + a)，随时间剪切出螺旋纹理
+  float omega = uSpin > 0.003 ? 6.79 / (pow(r, 1.5) + uSpin) : 2.4 * pow(r, -1.5);
+  float ang = uDiskTime * omega;
+  float ca = cos(ang), sa = sin(ang);
+  vec2 q = vec2(ca * p.x + sa * p.z, -sa * p.x + ca * p.z);   // 逆时针旋转的物质
+
+  float phi = atan(q.y, q.x) + r * 1.4;                        // 固定螺旋剪切 -> 流苏状条纹
+  float n = fbm(vec3(cos(phi) * 3.0, sin(phi) * 3.0, r * 0.85) + vec3(0.0, 0.0, -uDiskTime * 0.05));
+  float m = 0.25 + 1.5 * pow(max(n - 0.1, 0.0) * 1.25, 2.0);
+
+  float temp = 7500.0 * pow(rIn / r, 0.75);                    // 内热外冷
+  float emis = pow(rIn / r, 1.8);                              // 内亮外暗
+  float edge = smoothstep(rIn, rIn * 1.18, r) * (1.0 - smoothstep(rOut * 0.75, rOut, r));
+
+  float shift = 1.0;
+  if (uDoppler > 0.5) {
+    vec3 vdir = vec3(-p.z, 0.0, p.x) / max(r, 1e-3);           // 轨道速度方向（顺行）
+    float beta = uSpin > 0.003
+      ? min(1.15 * inversesqrt(max(r, 1.05)), 0.88)            // 克尔: v/c（M 单位）
+      : min(sqrt(0.5 / r) * 1.25, 0.86);                       // 史瓦西: v/c（rs 单位）
+    float gam = 1.0 / sqrt(1.0 - beta * beta);
+    float dop = 1.0 / (gam * (1.0 - beta * dot(vdir, -rd)));   // 相对论多普勒因子
+    float grav = uSpin > 0.003
+      ? sqrt(max(1.0 - 2.0 / r, 0.05))                         // 克尔: sqrt(1 - 2M/r)（跨能层时截断）
+      : sqrt(max(1.0 - 1.0 / r, 0.0));                         // 史瓦西: sqrt(1 - rs/r)
+    shift = clamp(dop * grav, 0.25, 3.0);
+  }
+
+  float inten = emis * m * edge * pow(shift, 3.0) * 2.2;       // I ∝ δ³ 相对论增亮
+  alpha = clamp(inten, 0.0, 1.0);
+  return blackbody(temp * shift) * inten * uDiskBright;
+}
+
+vec3 aces(vec3 x){
+  return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
+}
+
+// ===================== Kerr（克尔）时空光线追踪 =====================
+// Kerr-Schild 度规 g = η + S k⊗k（M=1，自旋轴 = z），哈密顿形式 H=0 约束积分。
+// 公式已经过独立数值验证（梯度差分、b_crit=√27、光子轨道半径，见仓库脚本）。
+
+// BL 半径 r（Kerr-Schild 隐式定义: (x²+y²)/(r²+a²) + z²/r² = 1）
+float ksR(vec3 X){
+  float b = dot(X, X) - uSpin * uSpin;
+  float W = sqrt(b * b + 4.0 * uSpin * uSpin * X.z * X.z);
+  return sqrt(max(0.5 * (b + W), 1e-6));
+}
+
+// 标量场 S 与 k 及其梯度（∇r 的 z 分量与 x/y 不同！）
+void ksMetric(vec3 X, out float S, out vec3 Sg,
+              out vec3 k, out vec3 kg1, out vec3 kg2, out vec3 kg3){
+  float a  = uSpin;
+  float R2 = dot(X, X);
+  float bb = R2 - a * a;
+  float W  = sqrt(max(bb * bb + 4.0 * a * a * X.z * X.z, 1e-8));
+  float r2 = 0.5 * (bb + W);
+  float r  = sqrt(max(r2, 1e-6));
+  vec3  rg = vec3(X.x * r / W, X.y * r / W, X.z * (r2 + a * a) / (r * W));
+  float Q  = r2 + a * a;
+  float D  = r2 * r2 + a * a * X.z * X.z;
+  S  = 2.0 * r2 * r / D;                                     // S = 2Mr³/(r⁴+a²z²)
+  vec3 Dg = 4.0 * r2 * r * rg + vec3(0.0, 0.0, 2.0 * a * a * X.z);
+  Sg  = 2.0 * (3.0 * r2 * rg * D - r2 * r * Dg) / (D * D);
+
+  float n1 = r * X.x + a * X.y;
+  float n2 = r * X.y - a * X.x;
+  k = vec3(n1 / Q, n2 / Q, X.z / r);
+  vec3 n1g = rg * X.x + vec3(r, a, 0.0);
+  vec3 n2g = rg * X.y + vec3(-a, r, 0.0);
+  kg1 = (n1g * Q - n1 * 2.0 * r * rg) / (Q * Q);
+  kg2 = (n2g * Q - n2 * 2.0 * r * rg) / (Q * Q);
+  kg3 = vec3(0.0, 0.0, 1.0 / r) - (X.z / r2) * rg;
+}
+
+// 哈密顿方程（p_t = −1 固定）: Ẋ = ∂H/∂p, ṗ = −∂H/∂x
+void hamilton(vec3 X, vec3 p, out vec3 Xd, out vec3 pd){
+  float S; vec3 Sg; vec3 k; vec3 kg1; vec3 kg2; vec3 kg3;
+  ksMetric(X, S, Sg, k, kg1, kg2, kg3);
+  float q = -1.0 - dot(k, p);
+  Xd = p + S * q * k;
+  pd = 0.5 * Sg * (q * q) - (S * q) * vec3(dot(p, kg1), dot(p, kg2), dot(p, kg3));
+}
+
+// H=0 重整化: 解 (p²−S·kp²)s² − 2S·kp·s − (1+S) = 0 的正根
+void renormP(vec3 X, inout vec3 p){
+  float S; vec3 Sg; vec3 k; vec3 kg1; vec3 kg2; vec3 kg3;
+  ksMetric(X, S, Sg, k, kg1, kg2, kg3);
+  float kp = dot(k, p);
+  float al = max(dot(p, p) - S * kp * kp, 1e-6);
+  float disc = sqrt(4.0 * S * S * kp * kp + 4.0 * al * (1.0 + S));
+  p *= (S * kp + 0.5 * disc) / al;
+}
+
+void rk4(inout vec3 X, inout vec3 p, float dt){
+  vec3 a1, b1, a2, b2, a3, b3, a4, b4;
+  hamilton(X, p, a1, b1);
+  hamilton(X + 0.5 * dt * a1, p + 0.5 * dt * b1, a2, b2);
+  hamilton(X + 0.5 * dt * a2, p + 0.5 * dt * b2, a3, b3);
+  hamilton(X + dt * a3, p + dt * b3, a4, b4);
+  X += (dt / 6.0) * (a1 + 2.0 * a2 + 2.0 * a3 + a4);
+  p += (dt / 6.0) * (b1 + 2.0 * b2 + 2.0 * b3 + b4);
+}
+
+// 最内稳定圆轨道 ISCO（Bardeen 公式, M=1）: 6M → 1M
+float risco(float a){
+  float z1 = 1.0 + pow(1.0 - a * a, 0.3333333) * (pow(1.0 + a, 0.3333333) + pow(1.0 - a, 0.3333333));
+  float z2 = sqrt(3.0 * a * a + z1 * z1);
+  return 3.0 + z2 - sqrt((3.0 - z1) * (3.0 + z1 + 2.0 * z2));
+}
+
+void main(){
+  vec2 uv = (2.0 * gl_FragCoord.xy - uRes) / uRes.y;
+
+  // 轨道相机（显示坐标: y 轴 = 自旋轴, 盘在 y=0 平面）
+  float cp = cos(uPitch), sp = sin(uPitch);
+  vec3 ro = uDist * vec3(cp * cos(uYaw), sp, cp * sin(uYaw));
+  vec3 f  = normalize(-ro);
+  vec3 rt = normalize(cross(f, vec3(0.0, 1.0, 0.0)));
+  vec3 up = cross(rt, f);
+  vec3 rd = normalize(uv.x * rt + uv.y * up + 1.5 * f);
+
+  vec3 col = vec3(0.0);
+  float trans = 1.0;
+  bool captured = false;
+  vec3 bgDir = vec3(0.0);          // 零向量 = 未逃逸（受困光线为黑）
+
+  if (uSpin < 0.003) {
+    // ---- 史瓦西路径（rs = 1，Binet 形式: a = -3/2 · h² · r̂ / r⁴）----
+    vec3 pos = ro;
+    vec3 vel = rd;
+    vec3 hv  = cross(pos, vel);
+    float h2 = dot(hv, hv);
+
+    for (int i = 0; i < 600; i++) {
+      if (i >= uSteps) break;
+      float r = length(pos);
+      if (r < 1.02) { captured = true; break; }                     // 落入视界
+      if (r > uDist + 6.0 && dot(pos, vel) > 0.0) break;            // 逃逸
+
+      float dt = r < 2.6 ? 0.05 : min(r * 0.11, 0.55);
+      if (uLensing > 0.5) {
+        vel += (-1.5 * h2 * pow(dot(pos, pos), -2.5)) * pos * dt;
+      }
+      vec3 np = pos + vel * dt;
+
+      // 穿越赤道面 -> 命中吸积盘（半透明，可多次叠加）
+      if (pos.y * np.y < 0.0) {
+        vec3 pc = mix(pos, np, pos.y / (pos.y - np.y));
+        float rD = length(pc.xz);
+        if (rD > 2.2 && rD < ROUT * 1.05) {
+          float alpha;
+          vec3 dc = diskColor(pc, normalize(vel), rD, RIN, ROUT, alpha);
+          col += trans * dc;
+          trans *= 1.0 - clamp(alpha * 0.85, 0.0, 1.0);
+          if (trans < 0.02) break;
+        }
+      }
+      pos = np;
+    }
+    if (!captured) bgDir = normalize(vel);
+  } else {
+    // ---- 克尔路径（Kerr-Schild 笛卡尔坐标，M = 1，自旋轴 = KS z）----
+    // 坐标映射（proper rotation，det=+1）: 显示(x,y,z) ↔ KS(x,−z,y)。
+    // 该取向下 D 形阴影的扁平侧与多普勒增亮侧同屏侧（已用验证过的积分器数值确认）。
+    vec3 X = vec3(ro.x, -ro.z, ro.y);
+    vec3 p = vec3(rd.x, -rd.z, rd.y);
+    renormP(X, p);                      // 初始动量满足零测地线约束 H = 0
+
+    float rPlus = 1.0 + sqrt(max(1.0 - uSpin * uSpin, 0.0));      // 外视界
+    float rIn = risco(uSpin);                                     // 盘内缘 = ISCO
+    float rOut = 20.0;
+
+    for (int i = 0; i < 600; i++) {
+      if (i >= uSteps) break;
+      float r = ksR(X);
+      if (r < rPlus + 0.02) { captured = true; break; }           // 落入视界
+
+      float S; vec3 Sg; vec3 k; vec3 kg1; vec3 kg2; vec3 kg3;
+      ksMetric(X, S, Sg, k, kg1, kg2, kg3);
+      float kp = dot(k, p);
+      { // H=0 重整化（复用上面的 S, k）
+        float al = max(dot(p, p) - S * kp * kp, 1e-6);
+        float disc = sqrt(4.0 * S * S * kp * kp + 4.0 * al * (1.0 + S));
+        p *= (S * kp + 0.5 * disc) / al;
+      }
+      float q = -1.0 - dot(k, p);
+      vec3 Xd = p + S * q * k;
+      vec3 pd = 0.5 * Sg * (q * q) - (S * q) * vec3(dot(p, kg1), dot(p, kg2), dot(p, kg3));
+
+      if (r > uDist + 12.0 && dot(X, Xd) > 0.0) {                 // 逃逸
+        vec3 nK = normalize(Xd);
+        bgDir = vec3(nK.x, nK.z, -nK.y);
+        break;
+      }
+
+      float dt = clamp(0.06 * (r - 0.95), 0.03, 1.0);
+      vec3 Xprev = X;
+      rk4(X, p, dt);
+
+      // 穿越赤道面 -> 命中吸积盘（半径用 BL r）
+      if (Xprev.z * X.z < 0.0) {
+        vec3 pcK = mix(Xprev, X, Xprev.z / (Xprev.z - X.z));
+        float rD = ksR(pcK);
+        if (rD > rIn * 0.75 && rD < rOut * 1.05) {
+          vec3 dK, pdD;
+          hamilton(pcK, p, dK, pdD);
+          vec3 dD = vec3(dK.x, dK.z, -dK.y);
+          float alpha;
+          vec3 dc = diskColor(vec3(pcK.x, pcK.z, -pcK.y), normalize(dD), rD, rIn, rOut, alpha);
+          col += trans * dc;
+          trans *= 1.0 - clamp(alpha * 0.85, 0.0, 1.0);
+          if (trans < 0.02) break;
+        }
+      }
+    }
+  }
+
+  if (!captured && trans > 0.02 && dot(bgDir, bgDir) > 0.5)
+    col += trans * background(bgDir);
+
+  col = aces(col * uExposure);
+  float vg = 1.0 - 0.22 * dot(uv * 0.5, uv * 0.5);                 // 轻微暗角
+  col *= clamp(vg, 0.0, 1.0);
+  col += (hash12(gl_FragCoord.xy + fract(uTime) * 61.7) - 0.5) / 255.0;  // 抖动去色带
+  gl_FragColor = vec4(pow(clamp(col, 0.0, 1.0), vec3(0.4545)), 1.0);
+}
+</script>
+
+<script>
+(function () {
+  'use strict';
+
+  var canvas = document.getElementById('gl');
+  var errBox = document.getElementById('err');
+  var gl = canvas.getContext('webgl', { antialias: false, alpha: false })
+        || canvas.getContext('experimental-webgl', { antialias: false, alpha: false });
+  if (!gl) { showError('当前浏览器不支持 WebGL，无法运行黑洞模拟。'); return; }
+
+  function showError(msg) {
+    errBox.style.display = 'block';
+    errBox.textContent = msg;
+  }
+
+  // ---------- 着色器编译 ----------
+  var vsSrc = 'attribute vec2 aPos; void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }';
+  var fsSrc = document.getElementById('fs').textContent;
+
+  function compile(type, src) {
+    var sh = gl.createShader(type);
+    gl.shaderSource(sh, src);
+    gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+      throw new Error(gl.getShaderInfoLog(sh));
+    }
+    return sh;
+  }
+
+  var prog;
+  try {
+    prog = gl.createProgram();
+    gl.attachShader(prog, compile(gl.VERTEX_SHADER, vsSrc));
+    gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, fsSrc));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+      throw new Error(gl.getProgramInfoLog(prog));
+    }
+  } catch (e) {
+    showError('着色器编译失败：\n' + e.message);
+    return;
+  }
+  gl.useProgram(prog);
+
+  var buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  var aPos = gl.getAttribLocation(prog, 'aPos');
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+  var U = {};
+  ['uRes', 'uTime', 'uDiskTime', 'uYaw', 'uPitch', 'uDist', 'uDiskBright',
+   'uExposure', 'uDoppler', 'uLensing', 'uSpin', 'uSteps'].forEach(function (n) {
+    U[n] = gl.getUniformLocation(prog, n);
+  });
+
+  // ---------- 状态 ----------
+  var QUALITY = {
+    low:  { steps: 220, scale: 0.55, dprCap: 1.0 },
+    mid:  { steps: 360, scale: 0.80, dprCap: 1.5 },
+    high: { steps: 500, scale: 1.00, dprCap: 2.0 }
+  };
+  var HOME = { yaw: 0.0, pitch: 0.18, dist: 17.0 };
+
+  var cam = { yaw: HOME.yaw, pitch: HOME.pitch, dist: HOME.dist };
+  var flow = 1, diskTime = 0, paused = false;
+  var steps = QUALITY.mid.steps;
+
+  // ---------- 尺寸 ----------
+  function resize() {
+    var q = QUALITY[document.getElementById('quality').value];
+    // 克尔路径（RK4 哈密顿积分）每步成本高数倍，自动降一档分辨率保帧率
+    var kerrScale = spin > 0.003 ? 0.85 : 1.0;
+    var dpr = Math.min(window.devicePixelRatio || 1, q.dprCap) * q.scale * kerrScale;
+    var w = Math.max(2, Math.round(canvas.clientWidth * dpr));
+    var h = Math.max(2, Math.round(canvas.clientHeight * dpr));
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w; canvas.height = h;
+      gl.viewport(0, 0, w, h);
+    }
+  }
+  window.addEventListener('resize', resize);
+
+  // ---------- 交互：拖动 / 滚轮 / 双指缩放 ----------
+  var pointers = new Map();
+  var dragging = false, pinchDist = 0;
+
+  canvas.addEventListener('pointerdown', function (e) {
+    canvas.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    dragging = true;
+    canvas.classList.add('dragging');
+    if (pointers.size === 2) {
+      var p = Array.from(pointers.values());
+      pinchDist = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
+    }
+  });
+  canvas.addEventListener('pointermove', function (e) {
+    if (!pointers.has(e.pointerId)) return;
+    var prev = pointers.get(e.pointerId);
+    if (pointers.size === 1) {
+      cam.yaw += (e.clientX - prev.x) * 0.005;
+      cam.pitch += (e.clientY - prev.y) * 0.005;
+      clampPitch();
+    }
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 2) {
+      var p = Array.from(pointers.values());
+      var d = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
+      if (pinchDist > 0) cam.dist = clampDist(cam.dist * pinchDist / d);
+      pinchDist = d;
+    }
+  });
+  function endPointer(e) {
+    pointers.delete(e.pointerId);
+    if (pointers.size === 0) { dragging = false; canvas.classList.remove('dragging'); }
+    pinchDist = 0;
+  }
+  canvas.addEventListener('pointerup', endPointer);
+  canvas.addEventListener('pointercancel', endPointer);
+
+  canvas.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    cam.dist = clampDist(cam.dist * Math.exp(e.deltaY * 0.0012));
+  }, { passive: false });
+
+  function clampPitch() {
+    // 避开 0 度（盘面完全侧视时退化），保留正负号
+    var min = 0.03;
+    if (Math.abs(cam.pitch) < min) cam.pitch = min * (cam.pitch < 0 ? -1 : 1);
+    cam.pitch = Math.max(-1.45, Math.min(1.45, cam.pitch));
+  }
+  function clampDist(d) { return Math.max(5.0, Math.min(24.0, d)); }
+
+  // ---------- 控件 ----------
+  function bindRange(id, cb) {
+    var el = document.getElementById(id);
+    var out = document.getElementById(id + 'V');
+    function apply() { cb(parseFloat(el.value)); if (out) out.textContent = parseFloat(el.value).toFixed(2); }
+    el.addEventListener('input', apply);
+    apply();
+  }
+  bindRange('exposure', function (v) { exposure = v; });
+  bindRange('bright', function (v) { bright = v; });
+  bindRange('flow', function (v) { flow = v; });
+  bindRange('spin', function (v) { spin = v; resize(); });
+  var exposure = 1.2, bright = 1.0, spin = 0;
+
+  document.getElementById('quality').addEventListener('change', function () {
+    steps = QUALITY[this.value].steps;
+    resize();
+  });
+
+  var pauseBtn = document.getElementById('pauseBtn');
+  function togglePause() {
+    paused = !paused;
+    pauseBtn.textContent = paused ? '继续' : '暂停';
+  }
+  pauseBtn.addEventListener('click', togglePause);
+  window.addEventListener('keydown', function (e) {
+    if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); togglePause(); }
+  });
+
+  document.getElementById('resetBtn').addEventListener('click', function () {
+    cam.yaw = HOME.yaw; cam.pitch = HOME.pitch; cam.dist = HOME.dist;
+  });
+
+  document.getElementById('shotBtn').addEventListener('click', function () {
+    render(performance.now());                       // 立即出最新一帧再截图
+    var a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = 'blackhole-' + Date.now() + '.png';
+    a.click();
+  });
+
+  document.getElementById('collapseBtn').addEventListener('click', function () {
+    var p = document.getElementById('panel');
+    p.classList.toggle('collapsed');
+    this.textContent = p.classList.contains('collapsed') ? '+' : '–';
+  });
+
+  // ---------- 渲染循环 ----------
+  var stats = document.getElementById('stats');
+  var frames = 0, lastStat = performance.now(), lastT = performance.now();
+
+  function render(t) {
+    var dt = Math.min((t - lastT) / 1000, 0.1);
+    lastT = t;
+    if (!paused) diskTime += dt * flow;
+    if (document.getElementById('orbit').checked && !dragging) cam.yaw += dt * 0.05;
+
+    gl.uniform2f(U.uRes, canvas.width, canvas.height);
+    gl.uniform1f(U.uTime, t / 1000);
+    gl.uniform1f(U.uDiskTime, diskTime);
+    gl.uniform1f(U.uYaw, cam.yaw);
+    gl.uniform1f(U.uPitch, cam.pitch);
+    // 史瓦西路径用 rs 单位；克尔路径用 M=1 单位（距离 ×2 等价换算）
+    gl.uniform1f(U.uDist, spin > 0.003 ? cam.dist * 2.0 : cam.dist);
+    gl.uniform1f(U.uSpin, spin);
+    gl.uniform1f(U.uDiskBright, bright);
+    gl.uniform1f(U.uExposure, exposure);
+    gl.uniform1f(U.uDoppler, document.getElementById('doppler').checked ? 1 : 0);
+    gl.uniform1f(U.uLensing, document.getElementById('lensing').checked ? 1 : 0);
+    gl.uniform1i(U.uSteps, steps);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    frames++;
+    if (t - lastStat > 500) {
+      var fps = Math.round(frames * 1000 / (t - lastStat));
+      stats.textContent = fps + ' FPS · ' + canvas.width + '×' + canvas.height;
+      frames = 0; lastStat = t;
+    }
+  }
+
+  function loop(t) { render(t); requestAnimationFrame(loop); }
+  resize();
+  requestAnimationFrame(loop);
+
+  // 提示 6 秒后淡出
+  setTimeout(function () { document.getElementById('hint').style.opacity = '0'; }, 6000);
+})();
+</script>
+</body>
+</html>
