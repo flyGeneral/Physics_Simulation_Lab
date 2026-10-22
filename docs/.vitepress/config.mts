@@ -58,6 +58,10 @@ export default defineConfig({
           text: '工程智慧',
           items: [{ text: '都江堰分水模型', link: '/physics/dujiangyan' }],
         },
+        {
+          text: '科幻设想',
+          items: [{ text: '曲率驱动', link: '/physics/curvature' }],
+        },
         { text: '数学几何', items: [] },
       ],
       '/sensing/': [

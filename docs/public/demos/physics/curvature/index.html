@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#000000">
+<title>曲率驱动 · 空间的冲浪</title>
+<link rel="icon" href="data:,">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; color: #dbe4f5; }
+  #gl { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; cursor: crosshair; touch-action: none; }
+
+  .card {
+    position: fixed; background: rgba(8, 11, 20, 0.58);
+    border: 1px solid rgba(140, 165, 220, 0.16); border-radius: 14px;
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 6px 30px rgba(0,0,0,0.45);
+  }
+  #title { top: 16px; left: 16px; padding: 10px 16px; user-select: none; }
+  #title h1 { font-size: 15px; font-weight: 600; letter-spacing: 1px; color: #f2f6ff; }
+  #title p { font-size: 11px; color: #8fa2c7; margin-top: 2px; }
+
+  #data { top: 16px; right: 16px; padding: 10px 14px; font: 11px/1.8 ui-monospace, Menlo, monospace; color: #9db1d8; user-select: none; min-width: 224px; }
+  #data b { color: #ffd28a; font-weight: 600; }
+  #data .row2 { display: flex; justify-content: space-between; gap: 14px; }
+  #data .warn { color: #ff9a6a; }
+
+  #stats { bottom: 16px; right: 16px; padding: 7px 12px; font: 11px ui-monospace, Menlo, monospace; color: #9db1d8; user-select: none; }
+
+  #panel { bottom: 16px; left: 16px; width: 252px; padding: 12px 14px 14px; }
+  #panel header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  #panel header span { font-size: 12px; font-weight: 600; color: #c8d6f2; letter-spacing: 1px; }
+  #collapseBtn { background: none; border: 1px solid rgba(140,165,220,.25); color: #9db1d8; border-radius: 6px; width: 22px; height: 22px; cursor: pointer; font-size: 12px; line-height: 1; }
+  #panel .row { display: flex; align-items: center; justify-content: space-between; margin: 9px 0; gap: 8px; }
+  #panel label { font-size: 12px; color: #b7c6e6; white-space: nowrap; }
+  #panel input[type=range] { flex: 1; min-width: 0; accent-color: #ff9a3c; height: 14px; cursor: pointer; }
+  #panel .val { font: 11px ui-monospace, Menlo, monospace; color: #ffb066; width: 38px; text-align: right; }
+  .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .btns button { flex: 1 1 46%; background: rgba(255,154,60,.13); border: 1px solid rgba(255,154,60,.4); color: #ffc48a; border-radius: 8px; padding: 6px 0; font-size: 12px; cursor: pointer; transition: background .15s; }
+  .btns button:hover { background: rgba(255,154,60,.28); }
+  .btns button.lit { background: rgba(255,154,60,.42); color: #fff2e2; }
+  .seg { display: flex; gap: 6px; margin: 2px 0 6px; }
+  .seg button { flex: 1; background: rgba(80, 110, 160, 0.10); border: 1px solid rgba(140, 165, 220, 0.28); color: #b7c6e6; border-radius: 8px; padding: 6px 2px; font-size: 11.5px; cursor: pointer; line-height: 1.35; transition: background .15s; }
+  .seg button.on { background: rgba(79, 195, 247, 0.22); border-color: rgba(79, 195, 247, 0.55); color: #dff3ff; }
+  #panel.collapsed .row, #panel.collapsed .btns, #panel.collapsed .seg { display: none; }
+  #panel .note { font-size: 10px; color: #6d7f9f; margin-top: 8px; line-height: 1.5; }
+
+  #stage { right: 16px; bottom: 52px; width: 340px; padding: 11px 14px 12px; }
+  #stage header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 5px; }
+  #stage .dot { font: 10px ui-monospace, Menlo, monospace; color: #ffb066; letter-spacing: 1px; }
+  #stage h2 { font-size: 13px; font-weight: 600; color: #ffd9a8; letter-spacing: 1px; }
+  #stage p { font-size: 11.5px; color: #b9c6e2; line-height: 1.65; }
+  #stage p em { color: #ffd9a8; font-style: normal; }
+
+  #hint { top: 74px; left: 16px; padding: 8px 13px; font-size: 11px; color: #93a6cc; user-select: none; transition: opacity 1.2s; pointer-events: none; }
+  #err { position: fixed; inset: 0; display: none; padding: 24px; background: #100505; color: #ff9a9a; font: 12px/1.6 ui-monospace, Menlo, monospace; white-space: pre-wrap; overflow: auto; z-index: 99; }
+  @media (max-width: 640px) { #panel { width: calc(100vw - 32px); } #hint, #data { display: none; } #stage { width: calc(100vw - 32px); } }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div class="card" id="title">
+  <h1>曲率驱动 · 空间的冲浪</h1>
+  <p id="subtitle">《三体》曲率引擎 · 航迹 · 黑域 二维示意</p>
+</div>
+<div class="card" id="hint">点击画面设定航向 · 空格暂停</div>
+
+<div class="card" id="data">
+  <div class="row2"><span id="dl1">船速</span><b><span id="dV">–</span><span id="du1"> c₀</span></b></div>
+  <div class="row2"><span id="dl2">尾迹最低光速</span><b><span id="dCmin">100</span><span id="du2">% c₀</span></b></div>
+  <div class="row2"><span id="dl3">航迹覆盖率</span><b><span id="dCov">0</span><span id="du3">%</span></b></div>
+  <div class="row2"><span id="dl4">状态</span><b id="dSt">常规推进</b></div>
+</div>
+
+<div class="card" id="panel">
+  <header>
+    <span>引擎控制</span>
+    <button id="collapseBtn" title="收起/展开">–</button>
+  </header>
+
+  <div class="seg" id="modeSeg">
+    <button id="segReal">真实物理 · 曲速泡</button>
+    <button id="segNovel" class="on">《三体》· 光速涂改</button>
+  </div>
+
+  <div class="row"><label id="powerLabel">曲率功率</label><input type="range" id="power" min="20" max="100" step="1" value="80"><span class="val" id="powerV">80</span></div>
+  <div class="row"><label>时间流速</label><input type="range" id="flow" min="0" max="3" step="0.05" value="1"><span class="val" id="flowV">1.00</span></div>
+
+  <div class="btns">
+    <button id="igniteBtn">点火 · 曲率引擎</button>
+    <button id="burstBtn">发射光脉冲</button>
+    <button id="pauseBtn">暂停</button>
+    <button id="resetBtn">重置</button>
+  </div>
+  <div class="note" id="panelNote">曲率驱动出自刘慈欣《三体Ⅲ·死神永生》。二维示意：把空间简化为网格，光速 = 光在网格上的传播速度。引擎将身后空间的光速"永久调低"，飞船被前后光速差推动。满功率点火可把尾迹光速压到约一成（演示值，且会缓慢回升扩散），而"黑域"需约 0.006%c（第三宇宙速度以下）——还要再低一个数量级。</div>
+</div>
+
+<div class="card" id="stage">
+  <header><span class="dot" id="stageDot">阶段 1 / 4</span><h2 id="stageTitle">常规空间</h2></header>
+  <p id="stageBody">空间各处光速相同（c₀ ≈ 30万km/s），光子匀速直线飞行。飞船靠核聚变"扔质量"推进，速度有上限——《三体》中恒星级战舰也只有光速的百分之几。<em>点击「点火」启动曲率引擎</em>，或点击画面为飞船设定航向。</p>
+</div>
+
+<div class="card" id="stats">-- FPS</div>
+<div id="err"></div>
+
+<!-- ======================= 背景着色器（光速场 + 网格形变） ======================= -->
+<script id="vs-bg" type="x-shader/x-vertex">
+attribute vec2 aPos;
+uniform vec2 uRes;
+varying vec2 vCoord;
+void main(){
+  gl_Position = vec4(aPos, 0.0, 1.0);
+  vCoord = vec2((aPos.x + 1.0) * 0.5 * uRes.x, (1.0 - aPos.y) * 0.5 * uRes.y);
+}
+</script>
+<script id="fs-bg" type="x-shader/x-fragment">
+precision highp float;
+varying vec2 vCoord;
+uniform vec2 uRes;
+uniform sampler2D uField;
+uniform float uMode;    // 0 = 《三体》光速场, 1 = 真实曲速泡
+uniform vec4 uShip;     // xy 船位置, z 泡半径, w 充能程度 chg
+uniform vec2 uDir;      // 航向单位向量
+uniform float uT;
+float fieldAt(vec2 p){ return texture2D(uField, p / uRes).r; }
+float hash(vec2 q){ return fract(sin(dot(q, vec2(127.1, 311.7))) * 43758.5453); }
+void main(){
+  vec3 col;
+  float S = 44.0;
+  if (uMode < 0.5) {
+    // ---- 《三体》模式：光速场。空间被"抹低"：网格向尾迹内部压缩 + 下沉 ----
+    float f = fieldAt(vCoord);
+    float low = 1.0 - f;
+    float e = 2.0;
+    vec2 grad = vec2(fieldAt(vCoord + vec2(e, 0.0)) - fieldAt(vCoord - vec2(e, 0.0)),
+                     fieldAt(vCoord + vec2(0.0, e)) - fieldAt(vCoord - vec2(0.0, e))) / (2.0 * e);
+    vec2 p = vCoord - grad * 34.0 * low + vec2(0.0, low * 24.0);
+    vec2 g2 = abs(fract(p / S) - 0.5) * S;
+    float line = 1.0 - smoothstep(0.8, 2.0, min(g2.x, g2.y));
+    float edge = smoothstep(0.010, 0.09, length(grad));   // 尾迹边缘的"光墙"
+    vec3 bg = mix(vec3(0.014, 0.020, 0.042),
+                  vec3(0.082, 0.036, 0.026) + vec3(0.010, 0.004, 0.030),
+                  smoothstep(1.0, 0.2, f) * 0.92);
+    vec3 gridCol = mix(vec3(0.30, 0.42, 0.62), vec3(1.0, 0.62, 0.30), smoothstep(1.0, 0.25, f));
+    col = bg;
+    col += gridCol * line * (0.13 + 0.26 * low);
+    col += vec3(1.0, 0.78, 0.45) * edge * 0.30;
+    vec2 st = floor(vCoord / 3.0);
+    col += vec3(0.8, 0.87, 1.0) * step(0.9975, hash(st)) * 0.33 * (0.25 + 0.75 * f);
+  } else {
+    // ---- 真实模式：阿库别瑞式曲速泡。前方空间收缩(网格加密)、后方膨胀(疏散)，
+    //      泡内空间随船流动(传送带)，泡壁一圈光环 = 需要负能量的地方 ----
+    vec2 rel = vCoord - uShip.xy;
+    float dd = max(length(rel), 1.0);
+    float R = uShip.z;
+    float a = (1.0 - smoothstep(R * 0.45, R * 1.10, dd)) * uShip.w;   // 泡内权重 × 充能
+    float ct = dot(rel / dd, uDir);                                   // +1 = 船正前方
+    float dens = 1.0 + 0.62 * a * ct;                                 // >1 加密 / <1 疏散
+    vec2 pl = uShip.xy + rel * dens - uDir * a * uT * 9.0;            // 泡内随船流动
+    vec2 g2 = abs(fract(pl / S) - 0.5) * S;
+    float line = 1.0 - smoothstep(0.8, 2.0, min(g2.x, g2.y));
+    vec3 gridCol = mix(vec3(0.30, 0.42, 0.62), vec3(0.40, 0.72, 1.0), a);
+    col = vec3(0.014, 0.020, 0.042) + gridCol * line * (0.14 + 0.12 * a);
+    float rim = smoothstep(R * 0.70, R * 0.92, dd) * (1.0 - smoothstep(R * 0.92, R * 1.15, dd)) * uShip.w;
+    col += vec3(0.45, 0.80, 1.0) * rim * 0.5;                         // 泡壁光环
+    vec2 st = floor(vCoord / 3.0);
+    col += vec3(0.8, 0.87, 1.0) * step(0.9975, hash(st)) * 0.33;
+  }
+  vec2 q = vCoord / uRes - 0.5;
+  col *= 1.0 - 0.9 * dot(q, q);
+  gl_FragColor = vec4(col, 1.0);
+}
+</script>
+
+<!-- ======================= 发光点着色器（光子 / 引擎辉光） ======================= -->
+<script id="vs-points" type="x-shader/x-vertex">
+attribute vec2 aPos;
+attribute vec4 aColor;
+attribute float aSize;
+uniform vec2 uRes;
+uniform float uScale;
+varying vec4 vColor;
+void main(){
+  gl_Position = vec4(aPos.x / uRes.x * 2.0 - 1.0, 1.0 - aPos.y / uRes.y * 2.0, 0.0, 1.0);
+  gl_PointSize = clamp(aSize * uScale, 1.0, 64.0);
+  vColor = aColor;
+}
+</script>
+<script id="fs-points" type="x-shader/x-fragment">
+precision mediump float;
+varying vec4 vColor;
+void main(){
+  vec2 d = gl_PointCoord - 0.5;
+  float fall = exp(-dot(d, d) * 14.0) - 0.069;
+  if (fall <= 0.0) discard;
+  gl_FragColor = vec4(vColor.rgb * fall * vColor.a, 1.0);
+}
+</script>
+
+<!-- ======================= 飞船着色器（纯色三角面） ======================= -->
+<script id="vs-ship" type="x-shader/x-vertex">
+attribute vec2 aPos;
+uniform vec2 uRes;
+void main(){
+  gl_Position = vec4(aPos.x / uRes.x * 2.0 - 1.0, 1.0 - aPos.y / uRes.y * 2.0, 0.0, 1.0);
+}
+</script>
+<script id="fs-ship" type="x-shader/x-fragment">
+precision mediump float;
+uniform vec4 uColor;
+void main(){ gl_FragColor = uColor; }
+</script>
+
+<script>
+(function () {
+  'use strict';
+
+  var canvas = document.getElementById('gl');
+  var errBox = document.getElementById('err');
+  var gl = canvas.getContext('webgl', { antialias: true, alpha: false })
+        || canvas.getContext('experimental-webgl', { antialias: true, alpha: false });
+  if (!gl) { showError('当前浏览器不支持 WebGL，无法运行。'); return; }
+
+  function showError(msg) {
+    errBox.style.display = 'block';
+    errBox.textContent = msg;
+  }
+
+  function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+  function smooth(a, b, x) { var t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); }
+  function wrapAngle(a) { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; }
+
+  // ================= WebGL 程序 =================
+  function compile(type, src) {
+    var sh = gl.createShader(type);
+    gl.shaderSource(sh, src); gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh));
+    return sh;
+  }
+  function makeProg(vsId, fsId) {
+    var prog = gl.createProgram();
+    gl.attachShader(prog, compile(gl.VERTEX_SHADER, document.getElementById(vsId).textContent));
+    gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, document.getElementById(fsId).textContent));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+    return prog;
+  }
+  var progB, progP, progS, UB = {}, UP = {}, US = {}, AB = {}, AP = {}, AS = {};
+  try {
+    progB = makeProg('vs-bg', 'fs-bg');
+    progP = makeProg('vs-points', 'fs-points');
+    progS = makeProg('vs-ship', 'fs-ship');
+  } catch (e) { showError('着色器编译失败：\n' + e.message); return; }
+  ['uRes', 'uField'].forEach(function (n) { UB[n] = gl.getUniformLocation(progB, n); });
+  ['uMode', 'uShip', 'uDir', 'uT'].forEach(function (n) { UB[n] = gl.getUniformLocation(progB, n); });
+  ['uRes', 'uScale'].forEach(function (n) { UP[n] = gl.getUniformLocation(progP, n); });
+  ['uRes', 'uColor'].forEach(function (n) { US[n] = gl.getUniformLocation(progS, n); });
+  AB.aPos = gl.getAttribLocation(progB, 'aPos');
+  AP.aPos = gl.getAttribLocation(progP, 'aPos');
+  AP.aColor = gl.getAttribLocation(progP, 'aColor');
+  AP.aSize = gl.getAttribLocation(progP, 'aSize');
+  AS.aPos = gl.getAttribLocation(progS, 'aPos');
+
+  function makeBuffer(target, data, usage) {
+    var b = gl.createBuffer();
+    gl.bindBuffer(target, b);
+    gl.bufferData(target, data, usage || gl.STATIC_DRAW);
+    return b;
+  }
+
+  // ================= 光速场（CPU 网格 -> 纹理） =================
+  // f ∈ [0,1]：1 = 正常光速 c0，越低光速越慢。曲率引擎在船尾把 f 压低，
+  // 并缓慢扩散（航迹永不消散——黑域的雏形）。
+  var FW = 200, FH = 112;
+  var F = new Float32Array(FW * FH);
+  var F8 = new Uint8Array(FW * FH);
+  F.fill(1);
+  var bFieldTex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, bFieldTex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, FW, FH, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, F8);
+  var bQuad = makeBuffer(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]));
+
+  var minF = 1, coverage = 0;
+
+  function fieldAt(px, py) {    // 双线性采样（屏幕像素坐标 -> 场值）
+    var u = clamp(px / viewW, 0, 1) * (FW - 1);
+    var v = clamp(py / viewH, 0, 1) * (FH - 1);
+    var i0 = Math.floor(u), j0 = Math.floor(v), fu = u - i0, fv = v - j0;
+    var i1 = Math.min(i0 + 1, FW - 1), j1 = Math.min(j0 + 1, FH - 1);
+    var f00 = F[j0 * FW + i0], f10 = F[j0 * FW + i1], f01 = F[j1 * FW + i0], f11 = F[j1 * FW + i1];
+    return f00 * (1 - fu) * (1 - fv) + f10 * fu * (1 - fv) + f01 * (1 - fu) * fv + f11 * fu * fv;
+  }
+
+  function stampTrail(cx, cy, dirx, diry, cmin) {
+    var R = 26, ox = cx - dirx * 15, oy = cy - diry * 15;
+    var gx = ox / viewW * FW, gy = oy / viewH * FH;
+    var rx = R / viewW * FW, ry = R / viewH * FH;
+    var j0 = Math.max(0, Math.floor(gy - ry)), j1 = Math.min(FH - 1, Math.ceil(gy + ry));
+    var i0 = Math.max(0, Math.floor(gx - rx)), i1 = Math.min(FW - 1, Math.ceil(gx + rx));
+    for (var j = j0; j <= j1; j++) {
+      for (var i = i0; i <= i1; i++) {
+        var dx = (i - gx) / rx, dy = (j - gy) / ry;
+        var d2 = dx * dx + dy * dy;
+        if (d2 >= 1) continue;
+        var s = 1 - Math.sqrt(d2);
+        var f = 1 - s * s * (1 - cmin);
+        var k = j * FW + i;
+        if (F[k] > f) F[k] = f;
+      }
+    }
+  }
+
+  function diffusePass() {      // 显式扩散：让航迹缓慢变宽（黑域式扩张）
+    var e = 0.04;
+    for (var j = 0; j < FH; j++) {
+      var row = j * FW;
+      for (var i = 0; i < FW; i++) {
+        var k = row + i, f = F[k], acc = 0;
+        if (i > 0) acc += F[k - 1]; else acc += f;
+        if (i < FW - 1) acc += F[k + 1]; else acc += f;
+        if (j > 0) acc += F[k - FW]; else acc += f;
+        if (j < FH - 1) acc += F[k + FW]; else acc += f;
+        F[k] = f + e * (acc * 0.25 - f);
+      }
+    }
+  }
+
+  function measureField() {
+    var m = 1, cnt = 0;
+    for (var k = 0; k < FW * FH; k++) {
+      if (F[k] < m) m = F[k];
+      if (F[k] < 0.85) cnt++;
+    }
+    minF = m;
+    coverage = cnt / (FW * FH);
+  }
+
+  function uploadField() {
+    for (var k = 0; k < FW * FH; k++) F8[k] = F[k] * 255;
+    gl.bindTexture(gl.TEXTURE_2D, bFieldTex);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, FW, FH, gl.LUMINANCE, gl.UNSIGNED_BYTE, F8);
+  }
+
+  // ================= 飞船 =================
+  var C0 = 210;                 // 正常空间光速（px/s，示意）
+  var W = 0, H = 0;             // 视口 CSS 尺寸
+  var viewW = 1280, viewH = 720;
+
+  // MODE：'novel' = 《三体》光速涂改；'real' = 真实曲速泡（阿库别瑞式）
+  var MODE = 'novel';
+  var BUB_R = 95;               // 曲速泡半径（px）
+  var chg = 0;                  // 泡充能程度 0..1（充放气平滑）
+  var warpFactor = 1.6;         // 泡坐标速度 = warpFactor × c₀（可 > 1）
+  var reachedSuper = false;     // 真实模式：曾达到坐标超光速
+
+  var ship = { x: 0, y: 0, heading: 0, v: C0 * 0.055 };
+  var engineOn = false, engineEverOn = false, reachedC = false, trailBig = false;
+  var power = 0.8, cminFrac = 1 - 0.94 * power;
+  var simT = 0;
+  var userTarget = null;        // {x, y, until}
+
+  function bubbleW(x, y) {      // 曲速泡权重：泡内≈1，向外高斯衰减（×充能）
+    var dx = x - ship.x, dy = y - ship.y;
+    return Math.exp(-(dx * dx + dy * dy) / (BUB_R * BUB_R));
+  }
+
+  function resetShip() {
+    ship.x = W * 0.30; ship.y = H * 0.52; ship.heading = 0; ship.v = C0 * 0.055;
+  }
+
+  function autoTarget() {
+    return {
+      x: W * 0.5 + W * 0.35 * Math.sin(simT * 0.11 + 1.7),
+      y: H * 0.46 + H * 0.30 * Math.sin(simT * 0.073)
+    };
+  }
+
+  function updateShip(dt) {
+    var t = (userTarget && simT < userTarget.until) ? userTarget : autoTarget();
+    var des = Math.atan2(t.y - ship.y, t.x - ship.x);
+    // 靠近边界时把航向掰回场内
+    var M = 70, blend;
+    if (ship.x < M) { blend = smooth(M, 14, ship.x); des += wrapAngle(0 - des) * blend; }
+    if (ship.x > W - M) { blend = smooth(W - M, W - 14, ship.x); des += wrapAngle(Math.PI - des) * blend; }
+    if (ship.y < M) { blend = smooth(M, 14, ship.y); des += wrapAngle(Math.PI / 2 - des) * blend; }
+    if (ship.y > H - M) { blend = smooth(H - M, H - 14, ship.y); des += wrapAngle(-Math.PI / 2 - des) * blend; }
+    des = wrapAngle(des);
+    var dA = wrapAngle(des - ship.heading);
+    var wm = 1.9 * (1 - 0.62 * Math.min(ship.v / C0, 1));
+    ship.heading = wrapAngle(ship.heading + clamp(dA, -wm * dt, wm * dt));
+
+    // 速度：小说模式逼近"前方空间的光速"；真实模式泡速 = 曲速因子×c₀（可坐标超光速）
+    var fAhead = fieldAt(ship.x + Math.cos(ship.heading) * 24, ship.y + Math.sin(ship.heading) * 24);
+    var vt;
+    if (engineOn && MODE === 'real') {
+      vt = C0 * warpFactor;
+      ship.v += (vt - ship.v) * Math.min(1, 1.1 * dt);
+      if (ship.v > C0) reachedSuper = true;
+    } else if (engineOn) {
+      vt = C0 * (0.20 + 0.80 * Math.max(fAhead, cminFrac * 0.5));
+      ship.v += (vt - ship.v) * Math.min(1, 1.1 * dt);
+      if (ship.v >= C0 * 0.85) reachedC = true;
+    } else {
+      ship.v += (C0 * 0.055 - ship.v) * Math.min(1, 0.55 * dt);
+    }
+    ship.x += Math.cos(ship.heading) * ship.v * dt;
+    ship.y += Math.sin(ship.heading) * ship.v * dt;
+    ship.x = clamp(ship.x, 8, W - 8);
+    ship.y = clamp(ship.y, 8, H - 8);
+
+    if (MODE === 'novel' && engineOn) stampTrail(ship.x, ship.y, Math.cos(ship.heading), Math.sin(ship.heading), cminFrac);
+  }
+
+  // ================= 光子 =================
+  // 光子速度 = 当地光速 c0·f：飞进尾迹就变慢、变红、堆积——尾迹像折射率极高的玻璃。
+  var MAXPH = 1100;
+  var phX = new Float32Array(MAXPH), phY = new Float32Array(MAXPH);
+  var phDX = new Float32Array(MAXPH), phDY = new Float32Array(MAXPH);
+  var phAge = new Float32Array(MAXPH), phLife = new Float32Array(MAXPH);
+  var phKind = new Uint8Array(MAXPH);     // 0 环境光 1 引擎尾迹光 2 脉冲
+  var phCursor = 0, ambientAcc = 0, trailAcc = 0;
+
+  function spawnPhoton(x, y, dx, dy, life, kind) {
+    for (var n = 0; n < MAXPH; n++) {
+      var i = (phCursor + n) % MAXPH;
+      if (phAge[i] >= phLife[i]) {
+        phCursor = (i + 1) % MAXPH;
+        phX[i] = x; phY[i] = y; phDX[i] = dx; phDY[i] = dy;
+        phAge[i] = 0; phLife[i] = life; phKind[i] = kind;
+        return;
+      }
+    }
+  }
+
+  function updatePhotons(dt) {
+    ambientAcc += 22 * dt;
+    while (ambientAcc > 1) {
+      ambientAcc -= 1;
+      var a = (Math.random() - 0.5) * 0.35;
+      spawnPhoton(-12, Math.random() * H, Math.cos(a), Math.sin(a), 22, 0);
+    }
+    if (MODE === 'novel' && engineOn) {
+      trailAcc += 85 * dt;
+      while (trailAcc > 1) {
+        trailAcc -= 1;
+        var c = Math.cos(ship.heading), s = Math.sin(ship.heading);
+        var j = (Math.random() - 0.5) * 0.5;
+        var dx = -c * Math.cos(j) - s * Math.sin(j), dy = -s * Math.cos(j) + c * Math.sin(j);
+        spawnPhoton(ship.x - c * 10 + (Math.random() - 0.5) * 7,
+                    ship.y - s * 10 + (Math.random() - 0.5) * 7, dx, dy, 9, 1);
+      }
+    }
+    for (var i = 0; i < MAXPH; i++) {
+      if (phAge[i] >= phLife[i]) continue;
+      if (MODE === 'real' && chg > 0.01) {
+        // 真实模式：局域光速恒为 c₀，但泡内空间被"整体搬运"——光子随载流。
+        // 泡速 > c₀ 时，前方光子被反复追上 → 在前壁堆积（视界效应的可视化）。
+        var wgt = bubbleW(phX[i], phY[i]) * chg;
+        phX[i] += (phDX[i] * C0 + Math.cos(ship.heading) * ship.v * wgt) * dt;
+        phY[i] += (phDY[i] * C0 + Math.sin(ship.heading) * ship.v * wgt) * dt;
+      } else {
+        var f = fieldAt(phX[i], phY[i]);
+        var spd = C0 * f;
+        phX[i] += phDX[i] * spd * dt;
+        phY[i] += phDY[i] * spd * dt;
+      }
+      phAge[i] += dt;
+      if (phAge[i] >= phLife[i] || phX[i] < -60 || phX[i] > W + 60 || phY[i] < -60 || phY[i] > H + 60) {
+        phAge[i] = phLife[i] = 1; phLife[i] = 0;   // 标记死亡
+      }
+    }
+  }
+
+  function fireBurst() {        // 一排横向光脉冲，穿过尾迹时肉眼可见地减速
+    for (var k = 0; k < 46; k++) {
+      var y = H * 0.14 + (H * 0.72) * k / 45;
+      spawnPhoton(-10, y, 1, 0, 26, 2);
+    }
+  }
+
+  // ================= 顶点缓冲 =================
+  var phVB = new Float32Array((MAXPH + 4) * 8);   // 光子 + 引擎辉光/尾焰
+  var bPoints = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, bPoints);
+  gl.bufferData(gl.ARRAY_BUFFER, phVB.byteLength, gl.DYNAMIC_DRAW);
+  var shipVB = new Float32Array(4 * 2 * 2);       // 两片三角 = 4 顶点对
+  var bShip = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, bShip);
+  gl.bufferData(gl.ARRAY_BUFFER, shipVB.byteLength, gl.DYNAMIC_DRAW);
+
+  // ================= UI =================
+  var timeFlow = 1, paused = false;
+  var igniteBtn = document.getElementById('igniteBtn');
+  var pauseBtn = document.getElementById('pauseBtn');
+
+  function bindRange(id, cb) {
+    var el = document.getElementById(id);
+    var out = document.getElementById(id + 'V');
+    function apply() {
+      var t = cb(parseFloat(el.value));
+      if (out) out.textContent = (t === undefined || t === null) ? parseFloat(el.value) : t;
+    }
+    el.addEventListener('input', apply);
+    apply();
+  }
+  bindRange('power', function (v) {
+    power = v / 100; cminFrac = 1 - 0.94 * power;
+    warpFactor = 0.4 + (v - 20) / 80 * 1.6;             // 真实模式：曲速因子 0.4 ~ 2.0
+    return MODE === 'real' ? warpFactor.toFixed(2) : undefined;
+  });
+  bindRange('flow', function (v) { timeFlow = v; });
+
+  function refreshIgniteLabel() {
+    igniteBtn.textContent = MODE === 'real'
+      ? (engineOn ? '放气 · 熄火' : '充能 · 曲速泡')
+      : (engineOn ? '熄火 · 滑行' : '点火 · 曲率引擎');
+    igniteBtn.classList.toggle('lit', engineOn);
+  }
+  igniteBtn.addEventListener('click', function () {
+    engineOn = !engineOn;
+    engineEverOn = engineEverOn || engineOn;
+    refreshIgniteLabel();
+  });
+  document.getElementById('burstBtn').addEventListener('click', fireBurst);
+  pauseBtn.addEventListener('click', togglePause);
+  function togglePause() { paused = !paused; pauseBtn.textContent = paused ? '继续' : '暂停'; }
+  window.addEventListener('keydown', function (e) {
+    if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); togglePause(); }
+  });
+  document.getElementById('resetBtn').addEventListener('click', function () {
+    F.fill(1); uploadField(); measureField();
+    engineOn = false; engineEverOn = false; reachedC = false; trailBig = false;
+    reachedSuper = false; chg = 0;
+    refreshIgniteLabel();
+    for (var i = 0; i < MAXPH; i++) { phAge[i] = 1; phLife[i] = 0; }
+    simT = 0; userTarget = null; resetShip();
+    lastStage = 0; updateStage(); updateDataCard();
+  });
+  document.getElementById('collapseBtn').addEventListener('click', function () {
+    var p = document.getElementById('panel');
+    p.classList.toggle('collapsed');
+    this.textContent = p.classList.contains('collapsed') ? '+' : '–';
+  });
+  canvas.addEventListener('pointerdown', function (e) {
+    userTarget = { x: e.clientX, y: e.clientY, until: simT + 6 };
+  });
+
+  // ================= 阶段讲解（双模式） =================
+  var STAGES_NOVEL = [
+    ['常规空间', '空间各处光速相同（c₀ ≈ 30万km/s），光子匀速直线飞行。飞船靠核聚变"扔质量"推进，速度有上限——《三体》中恒星级战舰也只有光速的百分之几。<em>点击「点火」启动曲率引擎</em>，或点击画面为飞船设定航向。'],
+    ['曲率点火 · 空间被抹低', '曲率引擎在船尾"熨"过空间：那片空间的光速被<em>永久调低</em>（网格变密下沉、色调转暗）。船前是正常空间，船后是被压低的空间——空间出现"坡度"，飞船像顺流的小船，被空间本身推着向前滑行。'],
+    ['光速航行 · 骑在交界上', '飞船骑在正常空间与低光速空间的交界上，速度逼近光速。看船尾——引擎发出的光一落进尾迹就再也追不上船，堆积成暗红色光带：尾迹内光速只剩百分之几，像一块折射率极高的玻璃。而舱内的人毫无感觉，他们的光速仍是 30 万 km/s。'],
+    ['航迹 · 黑域 · 黑暗森林', '航迹不会消散，还会<em>缓慢扩散</em>。叠加足够多的航迹，可把光速压到第三宇宙速度以下——"黑域"：向全宇宙广播"我们出不去，绝无威胁"的安全声明。但在黑暗森林里，一道航迹也是一盏灯：它暴露了"这里有过光速飞船"。<br><em>"前进！前进！！不择手段地前进！"——托马斯·维德</em>']
+  ];
+  var STAGES_REAL = [
+    ['平直时空', '各处光速均为 c₀，光子匀速直线飞行。这是所有曲速方案的起点：狭义相对论限定<em>局域</em>真空光速不可超越——但从未禁止"空间本身"携带你移动。<em>点击「充能」展开曲速泡</em>，或点击画面设定航向。'],
+    ['充能成泡 · 挪移时空', '阿库别瑞（1994）度规：<em>前方空间收缩（网格加密）、后方膨胀（网格疏散）</em>，泡内是一小块平直时空——船在泡内其实是静止的，是时空整体把泡"搬"走。泡壁需要<em>负能量密度的奇异物质</em>维持（画面中泡壁的光环）。注意：泡内光子仍以 c₀ 相对泡传播，局域相对论完好无损。'],
+    ['超光速（坐标）· 前壁视界', '泡速超过 c₀！但没有任何<em>局域</em>测量能发现"超光速"——被违反的只是远方观察者的常识。看泡的<em>前方</em>：被追上的光子在泡壁堆积、蓝移成亮带——对超光速泡，前壁是一座视界：舱内的人无法向前发信号，也就<em>无法转向或刹车</em>。'],
+    ['熄火 · 时空复原', '放气熄火，泡壁消失，<em>驶过的空间完全复原、不留任何痕迹</em>——这正是与《三体》设定的根本分歧：真实曲速引擎不涂改光速，只是临时弯曲几何。悬而未决的三件事：负能量被量子不等式卡死在微小量级；前壁视界无法从舱内控制；超光速威胁因果律。2021 年后的正能量改型不需要奇异物质——但也不再超光速。']
+  ];
+  var stageDot = document.getElementById('stageDot');
+  var stageTitle = document.getElementById('stageTitle');
+  var stageBody = document.getElementById('stageBody');
+  var lastStage = 0;
+
+  function stageNow() {
+    if (MODE === 'real') {
+      if (engineEverOn && !engineOn && reachedSuper) return 4;
+      if (reachedSuper) return 3;
+      if (engineEverOn) return 2;
+      return 1;
+    }
+    if (trailBig) return 4;
+    if (reachedC) return 3;
+    if (engineEverOn) return 2;
+    return 1;
+  }
+  function updateStage() {
+    var s = stageNow();
+    if (s !== lastStage) {
+      lastStage = s;
+      var st = (MODE === 'real' ? STAGES_REAL : STAGES_NOVEL)[s - 1];
+      stageDot.textContent = '阶段 ' + s + ' / 4';
+      stageTitle.textContent = st[0];
+      stageBody.innerHTML = st[1];
+    }
+  }
+
+  // ================= 数据卡 & 模式切换 =================
+  var dV = document.getElementById('dV'), dCmin = document.getElementById('dCmin');
+  var dCov = document.getElementById('dCov'), dSt = document.getElementById('dSt');
+  function updateDataCard() {
+    if (MODE === 'real') {
+      dV.textContent = (ship.v / C0).toFixed(2);
+      dCmin.textContent = 'c₀（恒定）';
+      dCov.classList.remove('warn');
+      if (!engineEverOn) dCov.textContent = '—';
+      else if (warpFactor > 1 && engineOn) { dCov.textContent = '需要 · 奇异物质'; dCov.classList.add('warn'); }
+      else if (reachedSuper || warpFactor > 1) dCov.textContent = '曾需要（超光速）';
+      else dCov.textContent = '无需（亚光速）';
+      var st, warn = false;
+      if (!engineEverOn) st = '平直时空';
+      else if (engineOn && ship.v > C0) st = '超光速航行（坐标）';
+      else if (engineOn) st = '亚光速曲速 · 加速中';
+      else if (reachedSuper) st = '泡已放气 · 时空复原无痕';
+      else { st = '泡已放气'; warn = true; }
+      dSt.textContent = st;
+      dSt.className = warn ? 'warn' : '';
+    } else {
+      dV.textContent = (ship.v / C0).toFixed(3);
+      dCmin.textContent = (minF * 100).toFixed(1);
+      dCov.textContent = (coverage * 100).toFixed(1);
+      dCov.classList.remove('warn');
+      var st2, warn2 = false;
+      if (!engineEverOn) st2 = '常规推进';
+      else if (engineOn && fieldAt(ship.x, ship.y) < 0.4) { st2 = '穿越旧航迹 · 被拖慢'; warn2 = true; }
+      else if (engineOn && ship.v >= C0 * 0.85) st2 = '光速航行';
+      else if (engineOn) st2 = '曲率点火 · 加速中';
+      else { st2 = '引擎熄火 · 滑行'; warn2 = true; }
+      dSt.textContent = st2;
+      dSt.className = warn2 ? 'warn' : '';
+    }
+  }
+
+  var MODE_TEXT = {
+    novel: {
+      subtitle: '《三体》曲率引擎 · 航迹 · 黑域 二维示意',
+      powerLabel: '曲率功率',
+      dl: ['船速', '尾迹最低光速', '航迹覆盖率', '状态'],
+      du: [' c₀', '% c₀', '%'],
+      note: '曲率驱动出自刘慈欣《三体Ⅲ·死神永生》。二维示意：把空间简化为网格，光速 = 光在网格上的传播速度。引擎将身后空间的光速"永久调低"，飞船被前后光速差推动。满功率点火可把尾迹光速压到约一成（演示值，且会缓慢回升扩散），而"黑域"需约 0.006%c（第三宇宙速度以下）——还要再低一个数量级。此为小说设定的可视化，现实物理中局域真空光速不可被涂改。'
+    },
+    real: {
+      subtitle: '真实曲速引擎研究 · 阿库别瑞泡 · 局域光速恒为 c₀',
+      powerLabel: '曲速因子',
+      dl: ['泡速度（坐标）', '局域光速', '负能量需求', '状态'],
+      du: ['× c₀', '', ''],
+      note: '对应现实研究：Alcubierre（1994）→ Bobrick & Martire（2021）→ 正能量亚光速解（2024）。局域光速恒为 c₀，泡靠"前收缩后膨胀"的时空几何整体搬运泡内的船，坐标速度可超 c₀。超光速泡壁需要负能量（奇异物质），受量子不等式、前壁视界（无法转向刹车）、因果律三重制约——目前纯属理论解，无工程路径；熄火后时空完全复原、不留痕迹。'
+    }
+  };
+  function updateModeLabels() {
+    var t = MODE_TEXT[MODE];
+    document.getElementById('subtitle').textContent = t.subtitle;
+    document.getElementById('powerLabel').textContent = t.powerLabel;
+    document.getElementById('powerV').textContent = MODE === 'real' ? warpFactor.toFixed(2) : Math.round(power * 100);
+    for (var i = 0; i < 4; i++) document.getElementById('dl' + (i + 1)).textContent = t.dl[i];
+    for (var k = 0; k < 3; k++) document.getElementById('du' + (k + 1)).textContent = t.du[k];
+    document.getElementById('panelNote').textContent = t.note;
+    refreshIgniteLabel();
+  }
+
+  function setMode(m) {
+    if (MODE === m) return;
+    MODE = m;
+    document.getElementById('segReal').classList.toggle('on', m === 'real');
+    document.getElementById('segNovel').classList.toggle('on', m === 'novel');
+    F.fill(1); uploadField(); measureField();
+    engineOn = false; engineEverOn = false; reachedC = false; trailBig = false;
+    reachedSuper = false; chg = 0;
+    for (var i = 0; i < MAXPH; i++) { phAge[i] = 1; phLife[i] = 0; }
+    simT = 0; userTarget = null; resetShip();
+    lastStage = 0;
+    updateModeLabels();
+    updateStage();
+    updateDataCard();
+  }
+  document.getElementById('segReal').addEventListener('click', function () { setMode('real'); });
+  document.getElementById('segNovel').addEventListener('click', function () { setMode('novel'); });
+
+  // ================= 画布尺寸 =================
+  var stats = document.getElementById('stats');
+  var frames = 0, lastStat = performance.now(), lastT = performance.now();
+  var dpr = 1;
+
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = Math.max(2, Math.round(canvas.clientWidth * dpr));
+    var h = Math.max(2, Math.round(canvas.clientHeight * dpr));
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w; canvas.height = h;
+      gl.viewport(0, 0, w, h);
+    }
+    W = canvas.clientWidth; H = canvas.clientHeight;
+    viewW = W; viewH = H;
+  }
+  window.addEventListener('resize', resize);
+
+  // ================= 绘制 =================
+  function drawBg() {
+    gl.disable(gl.BLEND);
+    gl.useProgram(progB);
+    gl.uniform2f(UB.uRes, W, H);
+    gl.uniform1f(UB.uMode, MODE === 'real' ? 1 : 0);
+    gl.uniform4f(UB.uShip, ship.x, ship.y, BUB_R, chg);
+    gl.uniform2f(UB.uDir, Math.cos(ship.heading), Math.sin(ship.heading));
+    gl.uniform1f(UB.uT, simT);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, bFieldTex);
+    gl.uniform1i(UB.uField, 0);
+    gl.enableVertexAttribArray(AB.aPos);
+    gl.bindBuffer(gl.ARRAY_BUFFER, bQuad);
+    gl.vertexAttribPointer(AB.aPos, 2, gl.FLOAT, false, 0, 0);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
+  function drawPoints() {
+    gl.useProgram(progP);
+    gl.uniform2f(UP.uRes, W, H);
+    gl.uniform1f(UP.uScale, dpr);
+    gl.bindBuffer(gl.ARRAY_BUFFER, bPoints);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, phVB.subarray(0, phN * 8));
+    gl.enableVertexAttribArray(AP.aPos);
+    gl.vertexAttribPointer(AP.aPos, 2, gl.FLOAT, false, 8 * 4, 0);
+    gl.enableVertexAttribArray(AP.aColor);
+    gl.vertexAttribPointer(AP.aColor, 4, gl.FLOAT, false, 8 * 4, 8);
+    gl.enableVertexAttribArray(AP.aSize);
+    gl.vertexAttribPointer(AP.aSize, 1, gl.FLOAT, false, 8 * 4, 24);
+    gl.drawArrays(gl.POINTS, 0, phN);
+  }
+
+  function drawShip() {
+    var c = Math.cos(ship.heading), s = Math.sin(ship.heading);
+    var nx = ship.x + c * 16, ny = ship.y + s * 16;
+    var lx = ship.x - c * 9 + s * 7.5, ly = ship.y - s * 9 - c * 7.5;
+    var rx = ship.x - c * 9 - s * 7.5, ry = ship.y - s * 9 + c * 7.5;
+    var tx = ship.x - c * 4, ty = ship.y - s * 4;
+    var o = 0;
+    shipVB[o++] = nx; shipVB[o++] = ny; shipVB[o++] = lx; shipVB[o++] = ly; shipVB[o++] = tx; shipVB[o++] = ty;
+    shipVB[o++] = nx; shipVB[o++] = ny; shipVB[o++] = tx; shipVB[o++] = ty; shipVB[o++] = rx; shipVB[o++] = ry;
+    gl.useProgram(progS);
+    gl.uniform2f(US.uRes, W, H);
+    gl.enableVertexAttribArray(AS.aPos);
+    gl.bindBuffer(gl.ARRAY_BUFFER, bShip);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, shipVB);
+    gl.vertexAttribPointer(AS.aPos, 2, gl.FLOAT, false, 0, 0);
+    gl.uniform4f(US.uColor, 0.86, 0.92, 1.0, 0.95);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+
+  function buildPointVerts() {
+    var n = 0;
+    for (var i = 0; i < MAXPH; i++) {
+      if (phAge[i] >= phLife[i]) continue;
+      var r, g, b, extraSize;
+      if (MODE === 'real') {
+        // 真实模式：被泡携带/前壁堆积的光子蓝移增亮（局域光速不变，无红移）
+        var car = bubbleW(phX[i], phY[i]) * chg;
+        r = 0.62 + 0.36 * car; g = 0.85 + 0.13 * car; b = 1.0;
+        extraSize = car * 2.2;
+      } else {
+        var f = fieldAt(phX[i], phY[i]);
+        var low = Math.pow(1 - f, 0.65);
+        r = 0.62 + (1.0 - 0.62) * low; g = 0.85 + (0.42 - 0.85) * low; b = 1.0 + (0.22 - 1.0) * low;
+        extraSize = (1 - f) * 1.6;
+      }
+      var aIn = Math.min(phAge[i] * 8, 1);
+      var aOut = 1 - smooth(phLife[i] - 1.6, phLife[i], phAge[i]);
+      var o = n * 8;
+      phVB[o] = phX[i]; phVB[o + 1] = phY[i];
+      phVB[o + 2] = r; phVB[o + 3] = g; phVB[o + 4] = b;
+      phVB[o + 5] = (phKind[i] === 2 ? 1.0 : 0.9) * aIn * aOut;
+      phVB[o + 6] = (phKind[i] === 2 ? 5.0 : 3.0) + extraSize;
+      n++;
+    }
+    // 引擎辉光（真实模式：青色泡芯辉光×充能 / 小说模式：琥珀双点 / 常规推进：蓝色小尾焰）
+    var c = Math.cos(ship.heading), s = Math.sin(ship.heading);
+    var ex = ship.x - c * 10, ey = ship.y - s * 10;
+    var pulse = 0.75 + 0.25 * Math.sin(simT * 21);
+    if (MODE === 'real') {
+      if (chg > 0.03) {
+        var o4 = n * 8;
+        phVB[o4] = ship.x; phVB[o4 + 1] = ship.y;
+        phVB[o4 + 2] = 0.45; phVB[o4 + 3] = 0.85; phVB[o4 + 4] = 1.0;
+        phVB[o4 + 5] = 0.55 * chg; phVB[o4 + 6] = 30 * chg * pulse; n++;
+        o4 = n * 8;
+        phVB[o4] = ship.x; phVB[o4 + 1] = ship.y;
+        phVB[o4 + 2] = 0.9; phVB[o4 + 3] = 0.98; phVB[o4 + 4] = 1.0;
+        phVB[o4 + 5] = 0.9 * chg; phVB[o4 + 6] = 6; n++;
+      }
+    } else if (engineOn) {
+      var o2 = n * 8;
+      phVB[o2] = ex; phVB[o2 + 1] = ey;
+      phVB[o2 + 2] = 1.0; phVB[o2 + 3] = 0.55; phVB[o2 + 4] = 0.25;
+      phVB[o2 + 5] = 0.8; phVB[o2 + 6] = 26 * pulse; n++;
+      o2 = n * 8;
+      phVB[o2] = ex; phVB[o2 + 1] = ey;
+      phVB[o2 + 2] = 1.0; phVB[o2 + 3] = 0.95; phVB[o2 + 4] = 0.85;
+      phVB[o2 + 5] = 0.9; phVB[o2 + 6] = 7; n++;
+    } else if (ship.v > C0 * 0.04) {
+      var o3 = n * 8;
+      phVB[o3] = ex; phVB[o3 + 1] = ey;
+      phVB[o3 + 2] = 0.45; phVB[o3 + 3] = 0.72; phVB[o3 + 4] = 1.0;
+      phVB[o3 + 5] = 0.5 * (0.6 + 0.4 * Math.sin(simT * 31));
+      phVB[o3 + 6] = 5 + 2 * Math.sin(simT * 47); n++;
+    }
+    phN = n;
+  }
+  var phN = 0;
+
+  // ================= 主循环 =================
+  var diffAcc = 0, measAcc = 0;
+
+  function render(t) {
+    var dt = Math.min((t - lastT) / 1000, 0.1);
+    lastT = t;
+    var simDt = paused ? 0 : dt * timeFlow;
+    if (simDt > 0) {
+      simT += simDt;
+      chg += ((engineOn && MODE === 'real' ? 1 : 0) - chg) * Math.min(1, 3 * simDt);   // 泡充/放气
+      updateShip(simDt);
+      updatePhotons(simDt);
+      if (MODE === 'novel') {                        // 光速场只在小说模式演化
+        diffAcc += simDt;
+        while (diffAcc > 0.05) { diffAcc -= 0.05; diffusePass(); }
+        measAcc += simDt;
+        if (measAcc > 0.25) { measAcc = 0; measureField(); }
+        if (!trailBig && coverage > 0.045) trailBig = true;
+        uploadField();
+      }
+    }
+
+    buildPointVerts();
+    drawBg();
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);          // 加法发光
+    drawPoints();
+    drawShip();
+    gl.disable(gl.BLEND);
+
+    updateStage();
+    if ((t - lastStat) > 400) updateDataCard();
+
+    frames++;
+    if (t - lastStat > 500) {
+      var fps = Math.round(frames * 1000 / (t - lastStat));
+      stats.textContent = fps + ' FPS · ' + canvas.width + '×' + canvas.height;
+      frames = 0; lastStat = t;
+    }
+  }
+
+  resize();
+  resetShip();
+  measureField();
+  uploadField();
+  // 调试/测试钩子：同步渲染一帧并返回 PNG
+  window.__cvSnapshot = function () {
+    render(performance.now());
+    return canvas.toDataURL('image/png');
+  };
+
+  function loop(t) {
+    try { render(t); } catch (e) { showError('渲染出错：\n' + (e && e.stack || e)); return; }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

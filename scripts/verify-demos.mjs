@@ -126,5 +126,14 @@ const cv11 = await page.$eval('canvas', c => c.width > 0 && c.height > 0)
 assert(cv11, 'demo11 画布已渲染')
 await shot('f11-dujiangyan')
 
+// ---- demo12: physics/curvature（曲率驱动 · 空间的冲浪，移植页） ----
+await page.goto(`${BASE}/demos/physics/curvature/`)
+await page.waitForTimeout(3000)
+const t12 = await page.title()
+assert(/曲率/.test(t12), 'demo12 标题加载: ' + t12)
+const cv12 = await page.$eval('canvas', c => c.width > 0 && c.height > 0)
+assert(cv12, 'demo12 画布已渲染')
+await shot('f12-curvature')
+
 console.log(errors.length ? 'CONSOLE ERRORS:\n' + errors.join('\n') : 'console clean')
 await browser.close()
