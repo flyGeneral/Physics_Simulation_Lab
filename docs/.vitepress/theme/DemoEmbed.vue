@@ -15,10 +15,15 @@ const props = withDefaults(
   { title: '', aspect: '16 / 9', minHeight: '560px' },
 )
 
+// 目录 URL 统一补全 index.html：dev 模式下 Vite 的 SPA fallback 会把
+// /demos/<name>/ 劫持成 VitePress 壳页面（客户端渲染出 404），
+// 显式文件路径在 dev 与构建产物下都命中真实 demo
+const srcFile = props.src.endsWith('/') ? props.src + 'index.html' : props.src
+
 const frameBox = ref<HTMLElement | null>(null)
 
 function openNew() {
-  window.open(props.src, '_blank')
+  window.open(srcFile, '_blank')
 }
 
 async function toggleFullscreen() {
@@ -44,7 +49,7 @@ async function toggleFullscreen() {
       </span>
     </div>
     <div ref="frameBox" class="demo-frame" :style="{ aspectRatio: aspect, minHeight }">
-      <iframe :src="src" :title="title || src" loading="lazy" allowfullscreen></iframe>
+      <iframe :src="srcFile" :title="title || src" loading="lazy" allowfullscreen></iframe>
     </div>
     <figcaption v-if="title">
       <span class="cap-tag">交互演示</span>{{ title }}

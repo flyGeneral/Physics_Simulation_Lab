@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>音腔脉冲对照动画：规则密封 vs 异形</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#161a21; --line:#262c36; --txt:#e8eaf0; --dim:#9aa3b2;
+    --cyan:#4cc9f0; --green:#7ae582; --orange:#f4a261; --yellow:#ffd166; --red:#ef6b73;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+       font:14px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:14px}
+  header h1{font-size:18px;margin:0 0 2px}
+  header .sub{color:var(--dim);font-size:12.5px;margin:0 0 12px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:12px}
+  .row{display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+  .act{background:transparent;border:1px solid var(--line);border-radius:8px;color:var(--txt);
+       padding:6px 16px;cursor:pointer;font-size:13px}
+  .act:hover{border-color:var(--cyan);color:var(--cyan)}
+  .act.primary{border-color:var(--cyan);color:var(--cyan)}
+  input[type=range]{flex:1;min-width:200px;accent-color:var(--cyan)}
+  .view-title{font-size:12.5px;margin:10px 0 6px}
+  .view-title b{color:var(--txt)}
+  canvas{display:block;width:100%;border-radius:8px;border:1px solid var(--line);background:#0b0d11}
+  .grid{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}
+  .card{flex:1;min-width:320px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .card h3{margin:0 0 8px;font-size:13px;color:var(--dim);font-weight:600}
+  .ebars .lbl{display:flex;justify-content:space-between;font-size:12px;color:var(--dim);margin:8px 0 3px}
+  .ebars .lbl b{color:var(--txt)}
+  .bar{display:flex;height:14px;border-radius:4px;overflow:hidden;background:#0b0d11;border:1px solid var(--line)}
+  .bar i{display:block;height:100%;transition:width .15s linear}
+  .b-mic{background:var(--green)} .b-port{background:var(--red)} .b-dis{background:#4a5a70}
+  .legend{display:flex;gap:14px;font-size:11.5px;color:var(--dim);margin-top:8px}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+  #elog{font:12px/1.9 ui-monospace,Menlo,monospace;max-height:230px;overflow-y:auto;color:var(--dim)}
+  #elog .tA{color:var(--cyan)} #elog .tB{color:var(--orange)} #elog .tS{color:var(--yellow)}
+  .readout{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--dim);padding:9px 2px 0}
+  .readout b{color:var(--txt)}
+  .note{color:var(--dim);font-size:12px;margin:10px 0 0}
+  .formula{font-family:ui-monospace,Menlo,monospace;color:var(--cyan);background:#0b0d11;
+           border:1px solid var(--line);border-radius:6px;padding:6px 10px;font-size:12.5px;margin:0 0 12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>音腔脉冲对照动画：规则密封 vs 异形</h1>
+  <p class="sub">同一颗压力脉冲同时射入两条 50 mm 音腔：上管规则等截面（密封完好），下管多级台阶（异形）。慢放 ~×1400 逐帧看波前如何在每处截面突变裂成「反射 + 透射」，以及能量最终流向谁。剧本由确定性声管模型逐样本预演，时间轴可任意回放。</p>
+</header>
+<p class="formula">r = (A₁−A₂)/(A₁+A₂)（台阶①~⑦：r = −0.71，单次撞击反射走 r² = 51% 能量）　·　膜片吸收份额 = 1−R²，R = 0.75 → 每次到达吸收 44%</p>
+
+<div class="panel">
+  <div class="row">
+    <button class="act primary" id="playBtn">⏸ 暂停</button>
+    <button class="act" id="stepBtn">⏭ 单步</button>
+    <button class="act" id="resetBtn">⟲ 重置</button>
+    <span style="font-size:12px;color:var(--dim);flex:none" id="tLabel">t = 0.0 µs</span>
+    <input type="range" id="timeline" min="0" max="449" step="1" value="0">
+  </div>
+</div>
+
+<div class="view-title"><b>A · 规则密封音腔</b>（等截面直管，无失配点）</div>
+<canvas id="tubeA"></canvas>
+<div class="view-title"><b>B · 异形音腔</b>（多级台阶，每处红 tick 是反射点）</div>
+<canvas id="tubeB"></canvas>
+
+<div class="grid">
+  <div class="card ebars">
+    <h3>能量结算（占注入脉冲能量的百分比）</h3>
+    <div class="lbl"><span>A 规则密封</span><b id="pA"></b></div>
+    <div class="bar"><i class="b-mic" id="A_mic"></i><i class="b-port" id="A_port"></i><i class="b-dis" id="A_dis"></i></div>
+    <div class="lbl"><span>B 异形台阶</span><b id="pB"></b></div>
+    <div class="bar"><i class="b-mic" id="B_mic"></i><i class="b-port" id="B_port"></i><i class="b-dis" id="B_dis"></i></div>
+    <div class="legend">
+      <span><i class="b-mic"></i>膜片吸收</span>
+      <span><i class="b-port"></i>反射出孔（白费）</span>
+      <span><i class="b-dis"></i>腔内耗散/残余</span>
+    </div>
+  </div>
+  <div class="card">
+    <h3>事件日志（播放到即点亮）</h3>
+    <div id="elog"></div>
+  </div>
+</div>
+
+<div class="readout" id="readout"></div>
+<p class="note">模型与「异形音腔与高频跌落仿真台」同一个 Kelly–Lochbaum 分段均匀声管（每段 1 mm）：孔口反射 −0.35、膜片 +0.75、段间损耗 0.9994；两管长度相同（50 mm），唯一变量是截面形状——排除「更长/更大」的干扰。稳态的 Helmholtz 滚降与驻波凹陷是多次往返叠加的结果，请配合频响仿真台对照理解；密封泄漏（旁路干涉 → 梳状 + 低频塌陷）是另一种故障，不在本动画模型内。</p>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+
+/* ---------------- 确定性声管模型（与 cavity-response 同一引擎，独立复制一份） ---------------- */
+const c = 343, dx = 0.001, fs = c/dx;          // 每段 1 mm，离散率 343 kHz
+const A0 = Math.PI*0.6*0.6;                    // 孔径 1.2 mm
+const RL = -0.35, RR = 0.75, GAMMA = 0.9994;
+const N = 50;                                  // 两管同长 50 mm
+const RUN = 1800, SPF = 4;                     // 总步数、每帧推进步数 → 450 帧
+const PULSE_C = 40, PW = 6;
+const gauss = n => Math.exp(-Math.pow((n-PULSE_C)/PW, 2));
+
+function areasOf(profile){
+  const A = new Float64Array(N), rj = new Float64Array(N-1);
+  for(let i=0;i<N;i++) A[i] = A0 * (profile==='steps' && (Math.floor(i/(N-1)*8)%2) ? 6 : 1);
+  for(let k=0;k<N-1;k++) rj[k] = (A[k]-A[k+1])/(A[k]+A[k+1]);
+  return {A, rj};
+}
+function mkTube(profile){
+  const {A, rj} = areasOf(profile);
+  return { A, rj, fR:new Float64Array(N), fL:new Float64Array(N), micDone:false, portDone:false,
+           micPeak:0, micPeakN:0, micN0:-1, nJunc:0,
+           cool:new Float64Array(N-1).fill(-1e9) };
+}
+function stepTube(t, g){
+  const nR = new Float64Array(N), nL = new Float64Array(N);
+  const outL = t.fL[0], outR = t.fR[N-1];
+  for(let k=0;k<N-1;k++){
+    const a=t.fR[k], b=t.fL[k+1], r=t.rj[k];
+    nR[k+1] = ((1+r)*a - r*b)*GAMMA;
+    nL[k]   = ((1-r)*b + r*a)*GAMMA;
+  }
+  nR[0] = g + RL*outL*GAMMA;
+  nL[N-1] = RR*outR*GAMMA;
+  t.fR = nR; t.fL = nL;
+  return {outR, outL};
+}
+
+/* ---------------- 预演一次，生成逐帧快照 + 事件 + 累积能量 ---------------- */
+let Einj = 0;
+for(let n=0;n<RUN;n++) Einj += gauss(n)*gauss(n);
+
+const tubeA = mkTube('straight'), tubeB = mkTube('steps');
+const snaps = { A: [], B: [] };                  // 每帧的声压实场
+const cum = { A: [], B: [] };                    // 每帧累积 {mic, port}
+const events = [];                               // {fr, tube, kind, k, label}
+let cmA = {mic:0, port:0}, cmB = {mic:0, port:0};
+
+function log(tube, kind, k, label, n){ events.push({fr:Math.floor(n/SPF), tube, kind, k, label}); }
+for(let n=0;n<RUN;n++){
+  const g = n < PULSE_C+90 ? gauss(n) : 0;
+  for(const [key, t] of [['A',tubeA], ['B',tubeB]]){
+    const {outR, outL} = stepTube(t, g);
+    (key==='A'?cmA:cmB).mic  += (1-RR*RR)*outR*outR;
+    (key==='A'?cmA:cmB).port += (1-RL*RL)*outL*outL;
+    // 事件：首达膜片（检测到上升沿后跟踪到波峰再记录）
+    const pmic = Math.abs((1+RR)*outR);
+    if(!t.micDone){
+      if(t.micN0 < 0 && n>PULSE_C+PW*3 && pmic > 0.07) t.micN0 = n;
+      if(t.micN0 >= 0){
+        if(pmic > t.micPeak){ t.micPeak = pmic; t.micPeakN = n; }
+        if((pmic < 0.5*t.micPeak || n - t.micN0 > 120) && t.micPeak > 0.1){
+          t.micDone = true;
+          log(key, 'mic', N-1, `首达膜片：峰值 ${t.micPeak.toFixed(2)}×入射`, t.micPeakN);
+        }
+      }
+    }
+    // 事件：首次反射出孔（注入窗口之后）
+    if(!t.portDone && n > PULSE_C+90 && Math.abs(outL) > 0.06){
+      t.portDone = true;
+      log(key, 'port', 0, '反射波出孔：能量开始流失', n);
+    }
+    // 事件：波前撞击台阶（仅异形管，前两个来回）
+    if(key==='B' && n < RUN/2 && t.nJunc < 14){
+      for(let k=0;k<N-1;k++) if(Math.abs(t.rj[k]) > 0.05){
+        if(Math.abs(t.fR[k]) > 0.10 && n - t.cool[k] > 200){
+          t.cool[k] = n;
+          t.nJunc++;
+          const jno = (()=>{ let n2=0, last=-1;
+            for(let q=0;q<=k;q++) if(Math.abs(t.rj[q])>0.05 && q>last){ n2++; last=q; } return n2; })();
+          log('B', 'junc', k, `撞击台阶${'①②③④⑤⑥⑦'[jno-1]||jno}：r=${t.rj[k].toFixed(2)}，反射带走 ${(t.rj[k]**2*100).toFixed(0)}% 能量`, n);
+        }
+      }
+    }
+  }
+  if(n % SPF === SPF-1){
+    snaps.A.push(Float64Array.from(tubeA.fR,(v,i)=>v+tubeA.fL[i]));
+    snaps.B.push(Float64Array.from(tubeB.fR,(v,i)=>v+tubeB.fL[i]));
+    cum.A.push({...cmA}); cum.B.push({...cmB});
+  }
+}
+log('S','sum',0, `结算：A 规则管膜片吸收 ${(cmA.mic/Einj*100).toFixed(0)}%｜B 异形管仅 ${(cmB.mic/Einj*100).toFixed(0)}%`, RUN-1);
+events.sort((a,b)=>a.fr-b.fr);
+
+/* ---------------- 画布 ---------------- */
+const aC=$('tubeA'), bC=$('tubeB');
+const TW=940, TH=140;
+function setup(cnv,w,h){
+  const d=window.devicePixelRatio||1;
+  cnv.width=w*d; cnv.height=h*d; cnv.getContext('2d').setTransform(d,0,0,d,0,0);
+}
+setup(aC,TW,TH); setup(bC,TW,TH);
+const ga=aC.getContext('2d'), gb=bC.getContext('2d');
+let globalPmax = 0;
+for(const arrs of [snaps.A, snaps.B]) for(const s of arrs) for(const v of s) globalPmax = Math.max(globalPmax, Math.abs(v));
+
+function drawTube(g, t, snap, evNow, title){
+  g.fillStyle='#0b0d11'; g.fillRect(0,0,TW,TH);
+  const mL=44, mR=56, cy=TH/2, iw=TW-mL-mR;
+  const Amax = Math.max(...t.A), hMin=24, hMax=46;
+  const X = i => mL + (i/(N-1))*iw;
+  const Hh = i => hMin + (hMax-hMin)*Math.sqrt(t.A[i]/Amax);
+  // 腔体
+  g.beginPath();
+  for(let i=0;i<N;i++) i? g.lineTo(X(i),cy-Hh(i)) : g.lineTo(X(0),cy-Hh(0));
+  for(let i=N-1;i>=0;i--) g.lineTo(X(i),cy+Hh(i));
+  g.closePath();
+  g.fillStyle='#10141b'; g.fill();
+  g.strokeStyle='#4a5a70'; g.lineWidth=2; g.stroke();
+  // 孔口
+  g.fillStyle='#0f1115'; g.fillRect(mL-14, cy-hMin, 14, 2*hMin);
+  g.fillStyle='#9aa3b2'; g.font='11px sans-serif'; g.textAlign='left';
+  g.fillText('声孔', 4, cy-30);
+  // 膜片
+  const dX = mL+iw+4;
+  g.strokeStyle='#7ae582'; g.lineWidth=3;
+  g.beginPath(); g.moveTo(dX,cy-Hh(N-1)-12); g.lineTo(dX,cy+Hh(N-1)+12); g.stroke();
+  g.fillStyle='#2b3a2e'; g.fillRect(dX+3, cy-Hh(N-1)-12, 36, 2*Hh(N-1)+24);
+  g.strokeStyle='#527a56'; g.strokeRect(dX+3, cy-Hh(N-1)-12, 36, 2*Hh(N-1)+24);
+  g.fillStyle='#7ae582'; g.font='10.5px sans-serif'; g.fillText('MEMS', dX+5, cy-Hh(N-1)-18);
+  // 反射点
+  g.strokeStyle='#ef6b73'; g.lineWidth=2;
+  for(let k=0;k<N-1;k++) if(Math.abs(t.rj[k])>0.05){
+    const x=X(k+1);
+    g.beginPath(); g.moveTo(x,cy-Hh(k+1)-8); g.lineTo(x,cy-Hh(k+1)+2); g.stroke();
+  }
+  // 压力波（两管同一比例：B 的到达幅度自然显小）
+  const amp = hMin*0.92/Math.max(0.25, Math.min(1.05, globalPmax));
+  g.strokeStyle='#4cc9f0'; g.lineWidth=1.8; g.beginPath();
+  for(let i=0;i<N;i++){
+    const y = cy - snapshot_val(snap,i)*amp;
+    i? g.lineTo(X(i),y) : g.lineTo(X(0),y);
+  }
+  g.stroke();
+  g.strokeStyle='#232a34'; g.lineWidth=1;
+  g.beginPath(); g.moveTo(mL,cy); g.lineTo(mL+iw,cy); g.stroke();
+  // 事件标注（45 帧内淡出）
+  const evAge = e => cursor - e.fr;
+  for(const e of evNow){
+    const age = evAge(e);
+    if(age < 0 || age > 45) continue;
+    const alpha = 1 - age/45;
+    const ex = e.k===0 ? mL+8 : (e.k===N-1 ? mL+iw-8 : X(e.k+1));
+    g.strokeStyle = `rgba(255,209,102,${alpha})`;
+    g.lineWidth = 2;
+    g.beginPath(); g.arc(ex, cy, 6+age*0.8, 0, 7); g.stroke();
+    g.fillStyle = `rgba(255,209,102,${alpha})`;
+    g.font='11px sans-serif';
+    g.textAlign = ex > TW/2 ? 'right' : 'left';
+    g.fillText(e.label, ex + (ex > TW/2 ? -10 : 10), cy - hMax - 14 - (age%3)*3);
+  }
+  function snapshot_val(s, i){ return s ? s[i] : 0; }
+}
+function drawAll(){
+  const evA = events.filter(e=>e.tube==='A'), evB = events.filter(e=>e.tube==='B');
+  drawTube(ga, tubeA, snaps.A[cursor]||null, evA, 'A');
+  drawTube(gb, tubeB, snaps.B[cursor]||null, evB, 'B');
+}
+
+/* ---------------- 能量条 / 日志 / 读数 ---------------- */
+let logged = 0;
+function updatePanels(){
+  const fr = Math.min(cursor, cum.A.length-1);
+  const eA = cum.A[fr], eB = cum.B[fr];
+  const pct = e => (e/Einj*100);
+  const set = (tube, e) => {
+    $(tube+'_mic').style.width  = Math.min(100,pct(e.mic))+'%';
+    $(tube+'_port').style.width = Math.min(100,pct(e.port))+'%';
+    $(tube+'_dis').style.width  = Math.max(0,100-pct(e.mic)-pct(e.port))+'%';
+  };
+  set('A', eA); set('B', eB);
+  $('pA').textContent = `膜片 ${pct(eA.mic).toFixed(0)}% · 出孔 ${pct(eA.port).toFixed(0)}%`;
+  $('pB').textContent = `膜片 ${pct(eB.mic).toFixed(0)}% · 出孔 ${pct(eB.port).toFixed(0)}%`;
+  while(logged < events.length && events[logged].fr <= cursor){
+    const e = events[logged++];
+    const div = document.createElement('div');
+    const tUs = (e.fr*SPF/fs*1e6).toFixed(1);
+    div.innerHTML = `<span class="t${e.tube}">${e.tube==='S'?'Σ':e.tube} ${tUs} µs</span>　${e.label}`;
+    $('elog').appendChild(div);
+    $('elog').scrollTop = 1e6;
+  }
+  const tUs = (cursor*SPF/fs*1e6);
+  $('tLabel').textContent = `t = ${tUs.toFixed(0)} µs（${cursor}/449 帧）`;
+  $('readout').innerHTML =
+    `<span>A 首达膜片幅度 <b>${firstAmp('A')}</b></span>` +
+    `<span>B 首达膜片幅度 <b>${firstAmp('B')}</b></span>` +
+    `<span>膜片吸收 A <b>${pct(eA.mic).toFixed(0)}%</b> vs B <b>${pct(eB.mic).toFixed(0)}%</b></span>` +
+    `<span class="${pct(eB.mic)<pct(eA.mic)-15?'warn':''}" style="${pct(eB.mic)<pct(eA.mic)-15?'color:var(--red)':''}">${pct(eB.mic)<pct(eA.mic)-15?'⚠ 异形管能量大量流失':'对照中'}</span>`;
+}
+function firstAmp(key){
+  const e = events.find(v=>v.tube===key && v.kind==='mic');
+  return e ? (e.label.match(/峰值 ([\d.]+)/)||[])[1]+'×入射' : '—';
+}
+
+/* ---------------- 播放控制 ---------------- */
+let cursor = 0, playing = true;
+function render(){ drawAll(); updatePanels(); }
+function setCursor(v){ cursor = Math.max(0, Math.min(449, v)); $('timeline').value = cursor; render(); }
+$('playBtn').onclick = () => {
+  playing = !playing;
+  $('playBtn').textContent = playing ? '⏸ 暂停' : '▶ 播放';
+};
+$('stepBtn').onclick = () => { playing = false; $('playBtn').textContent = '▶ 播放'; setCursor(cursor+1); };
+$('resetBtn').onclick = () => { $('elog').innerHTML=''; logged = 0; setCursor(0); };
+$('timeline').oninput = e => { playing = false; $('playBtn').textContent = '▶ 播放'; setCursor(+e.target.value); };
+
+let last = performance.now();
+function loop(now){
+  if(playing && now-last > 16){
+    last = now;
+    if(cursor >= 449){ playing = false; $('playBtn').textContent = '▶ 播放'; }
+    else setCursor(cursor+1);
+  }
+  requestAnimationFrame(loop);
+}
+render();
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

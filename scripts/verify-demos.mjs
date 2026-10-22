@@ -1,4 +1,4 @@
-// 视觉验证脚本：对本机 Chrome 截图三个 demo + 一个文档嵌入页
+// 视觉验证脚本：对本机 Chrome 截图五个 demo + 一个文档嵌入页
 // 用法：npm run docs:build && python3 -m http.server 4174 -d docs/.vitepress/dist & node scripts/verify-demos.mjs
 import { chromium } from 'playwright-core'
 import { mkdirSync } from 'fs'
@@ -46,6 +46,31 @@ await page.click('#modeSeg button[data-mode="wave"]')
 await page.check('#aaf')
 await page.waitForTimeout(900)
 await shot('f3-wave-aaf')
+
+// ---- demo4: mic cavity-response（音腔高频跌落） ----
+await page.goto(`${BASE}/demos/mic/cavity-response/`)
+await page.waitForTimeout(1500)
+const ro4 = await page.$eval('#readout', el => el.textContent)
+assert(/kHz/.test(ro4) && /dB/.test(ro4), 'demo4 音腔读数（含 kHz/dB）: ' + ro4.slice(0, 80))
+await shot('f4-cavity-straight')
+await page.click('#presetSeg button[data-preset="steps"]')
+await page.waitForTimeout(1200)
+const ro4b = await page.$eval('#readout', el => el.textContent)
+assert(/kHz/.test(ro4b) && /dB/.test(ro4b), 'demo4 台阶模式读数: ' + ro4b.slice(0, 80))
+await shot('f4-cavity-steps')
+
+// ---- demo5: mic cavity-pulse（音腔脉冲对照动画） ----
+await page.goto(`${BASE}/demos/mic/cavity-pulse/`)
+await page.waitForTimeout(2600)                       // 自动播放进行中
+const nLogs = await page.$$eval('#elog div', els => els.length)
+assert(nLogs >= 3, 'demo5 事件日志已点亮（' + nLogs + ' 条）')
+await shot('f5-pulse-mid')
+await page.fill('#timeline', '449')
+await page.dispatchEvent('#timeline', 'input')
+await page.waitForTimeout(400)
+const ro5 = await page.$eval('#readout', el => el.textContent)
+assert(/入射/.test(ro5) && /膜片吸收/.test(ro5), 'demo5 结算读数: ' + ro5.slice(0, 80))
+await shot('f5-pulse-end')
 
 console.log(errors.length ? 'CONSOLE ERRORS:\n' + errors.join('\n') : 'console clean')
 await browser.close()

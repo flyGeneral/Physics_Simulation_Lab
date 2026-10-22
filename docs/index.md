@@ -2,7 +2,7 @@
 layout: home
 
 hero:
-  name: 物理与感知实验室
+  name: 物理实验室
   text: Physics & Sensing Lab
   tagline: 用知识文档、剧本动画与参数仿真台，演示物理原理，讲透感知器件的选型与测试
   actions:

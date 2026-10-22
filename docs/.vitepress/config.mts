@@ -4,7 +4,7 @@ import { defineConfig } from 'vitepress'
 // 新增栏目三步：docs/ 下建目录 → 此处加 nav/sidebar → 首页 features 加卡片
 export default defineConfig({
   lang: 'zh-CN',
-  title: '物理与感知实验室',
+  title: '物理实验室',
   description:
     '物理知识演示与感知器件选型评估的学习资料库：知识文档 + 剧本动画 + 参数仿真台',
   lastUpdated: true,
@@ -28,6 +28,7 @@ export default defineConfig({
           { text: 'Camera · 帧率与运动采样', link: '/sensing/camera/temporal-sampling' },
           { text: 'Mic · 选型测试地图', link: '/sensing/mic/' },
           { text: 'Mic · 采样率与混叠', link: '/sensing/mic/aliasing' },
+          { text: 'Mic · 音腔与高频跌落', link: '/sensing/mic/cavity-response' },
           { text: '测试方法论', link: '/sensing/methodology' },
         ],
       },
@@ -63,6 +64,7 @@ export default defineConfig({
           items: [
             { text: '选型测试地图', link: '/sensing/mic/' },
             { text: '采样率与混叠', link: '/sensing/mic/aliasing' },
+            { text: '音腔与高频跌落', link: '/sensing/mic/cavity-response' },
           ],
         },
       ],

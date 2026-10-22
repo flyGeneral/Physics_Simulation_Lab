@@ -21,6 +21,7 @@
 | 指向性 | omni / 心形 / 8 字极坐标图 | 声程差干涉、双振膜压差 | MEMS 单体多为 omni，指向性靠阵列实现 | 规划中 |
 | 采样率与混叠 | 高频成分折返为低频噪声 | Nyquist 采样定理 | 高频嘶声「变成」啸叫，被误判为硬件故障 | [采样率与混叠](/sensing/mic/aliasing) |
 | 数字接口与时钟 | PDM/I2S 时钟质量、通道相位 | ΣΔ 调制、时钟抖动 | 时钟抖动直接劣化 SNR；多 mic 相位差决定波束 | 规划中 |
+| 音腔与高频跌落 | 装进结构后的整机高频频响 | 声学传输线、Helmholtz、截面突变反射 | 用自由场 datasheet 曲线推整机表现 | [音腔与高频跌落](/sensing/mic/cavity-response) |
 | 电源抑制 | 电源纹波串扰 | ASIC PSRR | 与 codec 同板时嗡声/射频噪声 | 规划中 |
 
 ## 选型权衡速查
@@ -41,4 +42,5 @@
 ## 延伸阅读
 
 - [采样率与混叠](/sensing/mic/aliasing) —— 与相机车轮错觉同源的数学
+- [音腔与高频跌落](/sensing/mic/cavity-response) —— 装机后频响由音腔说了算
 - [Camera 选型测试地图](/sensing/camera/) —— 器件不同，方法论相通
