@@ -1,0 +1,31 @@
+README.md
+  54eb2ac978ba0448 10-11,13-23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.8.1",
+  "base_commit_sha": "8472e6f01d124ebe3a21a4403f4e01bb484df8cb",
+  "prompts": {
+    "54eb2ac978ba0448": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "754e7ef5-9b23-48a9-b098-d9705e3664fe",
+        "model": "glm-5.3"
+      },
+      "human_author": "chenjinghao <chenjinghao@cvte.com>",
+      "messages": [],
+      "total_additions": 13,
+      "total_deletions": 3,
+      "accepted_lines": 13,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/db8b8c9f95a3f79b8488658cf1fb0c1aaa1a3c733c01db90e20821202a94dffd",
+      "token_usage": {
+        "input_tokens": 63723,
+        "output_tokens": 20790,
+        "cache_read_tokens": 1568640,
+        "cache_creation_tokens": 0,
+        "total_cost": null
+      }
+    }
+  }
+}
