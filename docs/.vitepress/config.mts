@@ -39,7 +39,10 @@ export default defineConfig({
       '/physics/': [
         {
           text: '物理演示',
-          items: [{ text: '栏目概览', link: '/physics/' }],
+          items: [
+            { text: '栏目概览', link: '/physics/' },
+            { text: '七星连珠', link: '/physics/planets' },
+          ],
         },
       ],
       '/sensing/': [

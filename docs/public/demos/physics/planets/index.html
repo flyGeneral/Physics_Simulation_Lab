@@ -1,0 +1,1223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#000000">
+<title>七星连珠 · 行星巡游</title>
+<link rel="icon" href="data:,">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; color: #dbe4f5; }
+  #gl { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; touch-action: none; cursor: crosshair; }
+
+  .card {
+    position: fixed; background: rgba(8, 11, 20, 0.58);
+    border: 1px solid rgba(140, 165, 220, 0.16); border-radius: 14px;
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 6px 30px rgba(0,0,0,0.45);
+  }
+  #title { top: 16px; left: 16px; padding: 10px 16px; user-select: none; }
+  #title h1 { font-size: 15px; font-weight: 600; letter-spacing: 1px; color: #f2f6ff; }
+  #title p { font-size: 11px; color: #8fa2c7; margin-top: 2px; }
+
+  #data { top: 16px; right: 16px; padding: 10px 14px; font: 11px/1.8 ui-monospace, Menlo, monospace; color: #9db1d8; user-select: none; min-width: 230px; }
+  #data b { color: #ffd28a; font-weight: 600; }
+  #data .row2 { display: flex; justify-content: space-between; gap: 14px; }
+  #data .hl { color: #d8b4ff; }
+
+  #tl { top: 92px; left: 16px; right: 276px; padding: 8px 12px 6px; user-select: none; }
+  #tl header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+  #tl header span { font-size: 11px; font-weight: 600; color: #c8d6f2; letter-spacing: 1px; }
+  #tl header em { font-style: normal; font-size: 9.5px; color: #7488ad; }
+  #tlCv { display: block; width: 100%; height: 52px; cursor: crosshair; }
+
+  #stats { bottom: 16px; right: 16px; padding: 7px 12px; font: 11px ui-monospace, Menlo, monospace; color: #9db1d8; user-select: none; }
+
+  #panel { bottom: 16px; left: 16px; width: 252px; padding: 12px 14px 14px; }
+  #panel header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  #panel header span { font-size: 12px; font-weight: 600; color: #c8d6f2; letter-spacing: 1px; }
+  #collapseBtn { background: none; border: 1px solid rgba(140,165,220,.25); color: #9db1d8; border-radius: 6px; width: 22px; height: 22px; cursor: pointer; font-size: 12px; line-height: 1; }
+  #panel .row { display: flex; align-items: center; justify-content: space-between; margin: 9px 0; gap: 8px; }
+  #panel label { font-size: 12px; color: #b7c6e6; white-space: nowrap; }
+  #panel input[type=range] { flex: 1; min-width: 0; accent-color: #b48cff; height: 14px; cursor: pointer; }
+  #panel .val { font: 11px ui-monospace, Menlo, monospace; color: #cbb2ff; width: 66px; text-align: right; }
+  .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .btns button { flex: 1 1 30%; background: rgba(180,140,255,.12); border: 1px solid rgba(180,140,255,.4); color: #d8c6ff; border-radius: 8px; padding: 6px 2px; font-size: 11px; cursor: pointer; transition: background .15s; }
+  .btns button:hover { background: rgba(180,140,255,.26); }
+  .btns button.lit { background: rgba(180,140,255,.4); color: #f4edff; }
+  .check { display: flex; align-items: center; gap: 7px; margin: 8px 0; cursor: pointer; font-size: 12px; color: #b7c6e6; }
+  .check input { accent-color: #b48cff; width: 14px; height: 14px; cursor: pointer; }
+  .seg { display: flex; gap: 6px; margin: 2px 0 6px; }
+  .seg button { flex: 1; background: rgba(80, 110, 160, 0.10); border: 1px solid rgba(140, 165, 220, 0.28); color: #b7c6e6; border-radius: 8px; padding: 6px 2px; font-size: 11.5px; cursor: pointer; transition: background .15s; }
+  .seg button.on { background: rgba(180, 140, 255, 0.20); border-color: rgba(180, 140, 255, 0.55); color: #e6dbff; }
+  #panel.collapsed .row, #panel.collapsed .btns, #panel.collapsed .check, #panel.collapsed .seg { display: none; }
+  #panel .note { font-size: 10px; color: #6d7f9f; margin-top: 8px; line-height: 1.5; }
+
+  #stage { right: 16px; bottom: 52px; width: 340px; padding: 11px 14px 12px; }
+  #stage header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 5px; }
+  #stage .dot { font: 10px ui-monospace, Menlo, monospace; color: #cbb2ff; letter-spacing: 1px; }
+  #stage h2 { font-size: 13px; font-weight: 600; color: #e4d6ff; letter-spacing: 1px; }
+  #stage p { font-size: 11.5px; color: #b9c6e2; line-height: 1.65; }
+  #stage p em { color: #e4d6ff; font-style: normal; }
+
+  .lbl { position: fixed; font-size: 11px; font-weight: 600; color: #fff; background: rgba(7, 13, 26, 0.72); border: 1px solid #9db1d8; border-radius: 7px; padding: 2px 7px; letter-spacing: 0.5px; pointer-events: none; user-select: none; transform: translate(-50%, -160%); white-space: nowrap; }
+  .lbl small { font-weight: 400; font-size: 9px; color: #b9c9e8; }
+  .lbl.dim { opacity: 0.55; font-style: italic; }
+  .lbl.tag { background: none; border: none; color: #7488ad; font-weight: 400; font-size: 10px; }
+  .lbl.spread { border-color: #b48cff; color: #e4d6ff; background: rgba(30, 18, 52, 0.8); }
+
+  #hint { bottom: 16px; left: 284px; padding: 8px 13px; font-size: 11px; color: #93a6cc; user-select: none; pointer-events: none; }
+  #err { position: fixed; inset: 0; display: none; padding: 24px; background: #100505; color: #ff9a9a; font: 12px/1.6 ui-monospace, Menlo, monospace; white-space: pre-wrap; overflow: auto; z-index: 99; }
+  @media (max-width: 880px) { #panel { width: calc(100vw - 32px); } #hint, #data, #tl, #stage { display: none; } }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div class="card" id="title">
+  <h1>七星连珠 · 行星巡游</h1>
+  <p>黄道共面 · 四十年仅三遇的黄昏七星 · 稀有而无害</p>
+</div>
+
+<div class="card" id="data">
+  <div class="row2"><span>模拟日期</span><b id="dDate">–</b></div>
+  <div class="row2"><span>黄昏可见（东大距侧）</span><b id="dEve">–</b></div>
+  <div class="row2"><span>清晨可见（西大距侧）</span><b id="dMor">–</b></div>
+  <div class="row2"><span>黄昏张角</span><b id="dSpread">–</b></div>
+  <div class="row2"><span>天象等级</span><b id="dLvl" class="hl">–</b></div>
+  <div class="row2"><span>月相 · 月地距离</span><b><span id="dMoon">–</span></b></div>
+</div>
+
+<div class="card" id="tl">
+  <header><span>四十年连珠日历 2006 – 2046</span><em>柱高 = 当晚黄昏可见行星数 · 点击跳转</em></header>
+  <canvas id="tlCv"></canvas>
+</div>
+
+<div class="card" id="panel">
+  <header>
+    <span>时间机器</span>
+    <button id="collapseBtn" title="收起/展开">–</button>
+  </header>
+
+  <div class="seg" id="viewSeg">
+    <button id="segTop" class="on">俯视 2D</button>
+    <button id="seg3d">三维 3D</button>
+  </div>
+
+  <div class="row"><label>日期</label><input type="range" id="date" min="0" max="1000" step="1" value="0"><span class="val" id="dateV">–</span></div>
+  <div class="row"><label>速度</label><input type="range" id="speed" min="0" max="100" step="1" value="52"><span class="val" id="speedV">–</span></div>
+
+  <label class="check"><input type="checkbox" id="labels" checked>行星标签</label>
+  <label class="check"><input type="checkbox" id="orbits" checked>轨道线</label>
+  <label class="check"><input type="checkbox" id="wedge" checked>黄昏视域扇区</label>
+
+  <div class="btns">
+    <button id="playBtn">播放</button>
+    <button id="nowBtn">今天</button>
+    <button id="ev1Btn">2025-02-28 · 黄昏七星</button>
+    <button id="ev2Btn">2026-02-28 · 七星之夜</button>
+    <button id="ev3Btn">2026-11-14 · 四星晨聚</button>
+  </div>
+  <div class="note">行星星历采用 J2000 平均轨道根数（JPL 近似表，1800–2050 有效）。俯视图半径按 (r/30AU)^0.6 压缩示意，<b>角度真实</b>；"可见" = 距日角距 >10°（黄昏为太阳东侧、清晨为西侧）；天王星（5.8 等）、海王星（7.8 等）肉眼难见需望远镜。行星连珠是纯视觉现象，与吉凶无关。左侧星图可滚轮/触控板捏合/双指缩放（0.6–4×，双击复位）。</div>
+</div>
+
+<div class="card" id="stage">
+  <header><span class="dot" id="stageDot">概念 1 / 3</span><h2 id="stageTitle">–</h2></header>
+  <p id="stageBody">–</p>
+</div>
+
+<div class="card" id="hint">点击时间条或拖动日期 · 滚轮/双指缩放左侧星图 · 双击复位 · 空格播放</div>
+<div class="card" id="stats">-- FPS</div>
+<div id="lblLayer"></div>
+<div id="err"></div>
+
+<!-- ======================= 点精灵（行星 / 太阳） ======================= -->
+<script id="vs-pt" type="x-shader/x-vertex">
+attribute vec2 aPos;
+attribute vec4 aColor;
+attribute float aSize;
+uniform vec4 uVP;    // 视区 {x, y, w, h}（CSS 像素）
+uniform float uDpr;
+varying vec4 vColor;
+void main(){
+  gl_Position = vec4((aPos.x - uVP.x) / uVP.z * 2.0 - 1.0,
+                     1.0 - (aPos.y - uVP.y) / uVP.w * 2.0, 0.0, 1.0);
+  gl_PointSize = clamp(aSize * uDpr, 1.0, 96.0 * uDpr);
+  vColor = aColor;
+}
+</script>
+<script id="fs-pt" type="x-shader/x-fragment">
+precision mediump float;
+varying vec4 vColor;
+void main(){
+  vec2 d = gl_PointCoord - 0.5;
+  float fall = exp(-dot(d, d) * 11.0) - 0.045;
+  if (fall <= 0.0) discard;
+  gl_FragColor = vec4(vColor.rgb * fall * vColor.a, 1.0);
+}
+</script>
+
+<!-- ======================= 线段 / 三角（轨道 / 弧线 / 扇区） ======================= -->
+<script id="vs-pr" type="x-shader/x-vertex">
+attribute vec2 aPos;
+attribute vec4 aColor;
+uniform vec4 uVP;
+varying vec4 vColor;
+void main(){
+  gl_Position = vec4((aPos.x - uVP.x) / uVP.z * 2.0 - 1.0,
+                     1.0 - (aPos.y - uVP.y) / uVP.w * 2.0, 0.0, 1.0);
+  vColor = aColor;
+}
+</script>
+<script id="fs-pr" type="x-shader/x-fragment">
+precision mediump float;
+varying vec4 vColor;
+void main(){ gl_FragColor = vColor; }
+</script>
+
+<!-- ======================= 背景全景（两视区各一） ======================= -->
+<script id="vs-full" type="x-shader/x-vertex">
+attribute vec2 aPos;
+void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }
+</script>
+<script id="fs-bg" type="x-shader/x-fragment">
+precision highp float;
+uniform vec4 uVP;         // 当前视区 {x, y, w, h}（CSS）
+uniform float uDpr;
+uniform float uCanvasH;   // 画布 CSS 高
+uniform float uMode;      // 0 = 左·太阳系背景, 1 = 右·黄昏天空
+uniform vec2 uSunPt;      // 模式1：太阳点（视区局部坐标）
+uniform float uHorizon;   // 模式1：地平线 y
+uniform float uT;
+float hash(vec2 q){ return fract(sin(dot(q, vec2(127.1, 311.7))) * 43758.5453); }
+void main(){
+  vec2 p = vec2(gl_FragCoord.x / uDpr - uVP.x,
+                (uCanvasH - gl_FragCoord.y / uDpr) - uVP.y);   // 视区局部坐标
+  vec3 col;
+  if (uMode < 0.5) {
+    // ---- 太阳系背景：暗晕 + 星点 ----
+    vec2 q = p / uVP.zw - vec2(0.5, 0.5);
+    col = vec3(0.012, 0.016, 0.030);
+    col += vec3(0.05, 0.04, 0.09) * (1.0 - smoothstep(0.1, 0.75, length(q)));
+    col += vec3(0.55, 0.62, 0.85) * step(0.9962, hash(floor(p / 3.0))) * 0.20;
+    col *= 1.0 - 0.55 * dot(q, q);
+  } else {
+    // ---- 黄昏天空：地平线、暮辉、星点 ----
+    float above = p.y - uHorizon;
+    vec3 sky = mix(vec3(0.075, 0.055, 0.115), vec3(0.012, 0.016, 0.042),
+                   smoothstep(0.0, uVP.w * 0.75, above));
+    float gd = smoothstep(0.0, 40.0, -above);                 // 地下渐暗
+    vec3 ground = mix(vec3(0.045, 0.032, 0.028), vec3(0.012, 0.010, 0.016), gd);
+    col = above >= 0.0 ? sky : ground;
+    float dsun = distance(p, uSunPt);
+    vec3 glow = vec3(1.0, 0.42, 0.16) * exp(-dsun / 90.0) * 0.42;   // 暮辉
+    float band = exp(-abs(above) / 26.0) * 0.5;
+    col += glow * band;
+    col += vec3(1.0, 0.55, 0.25) * exp(-dsun / 150.0) * 0.16;
+    float twk = 0.75 + 0.25 * sin(uT * 2.3 + hash(floor(p / 3.0)) * 40.0);
+    col += vec3(0.8, 0.87, 1.0) * step(0.9952, hash(floor(p / 3.0)))
+           * 0.34 * twk * smoothstep(0.0, 60.0, above) * (1.0 - exp(-dsun / 130.0));
+    vec2 q2 = p / uVP.zw - vec2(0.5, 0.5);
+    col *= 1.0 - 0.5 * dot(q2, q2);
+  }
+  gl_FragColor = vec4(col, 1.0);
+}
+</script>
+
+<!-- ======================= 三维点/线（3D 视角） ======================= -->
+<script id="vs3-pt" type="x-shader/x-vertex">
+attribute vec3 aPos;
+attribute vec4 aColor;
+attribute float aSize;
+uniform mat4 uMVP;
+uniform float uDpr;
+varying vec4 vColor;
+void main(){
+  vec4 p = uMVP * vec4(aPos, 1.0);
+  gl_Position = p;
+  gl_PointSize = clamp(aSize * uDpr / max(p.w, 0.25), 2.0, 26.0 * uDpr);
+  vColor = aColor;
+}
+</script>
+<script id="vs3-pr" type="x-shader/x-vertex">
+attribute vec3 aPos;
+attribute vec4 aColor;
+uniform mat4 uMVP;
+varying vec4 vColor;
+void main(){
+  gl_Position = uMVP * vec4(aPos, 1.0);
+  vColor = aColor;
+}
+</script>
+
+<script>
+(function () {
+  'use strict';
+
+  var canvas = document.getElementById('gl');
+  var errBox = document.getElementById('err');
+  var gl = canvas.getContext('webgl', { antialias: true, alpha: false })
+        || canvas.getContext('experimental-webgl', { antialias: true, alpha: false });
+  if (!gl) { showError('当前浏览器不支持 WebGL，无法运行。'); return; }
+
+  function showError(msg) {
+    errBox.style.display = 'block';
+    errBox.textContent = msg;
+  }
+  function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+  function norm360(d) { d %= 360; return d < 0 ? d + 360 : d; }
+  var D2R = Math.PI / 180;
+
+  // ================= 星历：J2000 平均轨道根数（JPL 近似表，1800–2050） =================
+  // [a(AU), ȧ/百年, e, ė, i°, i̇, L°, L̇, ϖ°, ϖ̇, Ω°, Ω̇]
+  var EL = {
+    mercury: [0.38709927,0.00000037, 0.20563593,0.00001906, 7.00497902,-0.00594749, 252.25032350,149472.67411175, 77.45779628,0.16047689, 48.33076593,-0.12534081],
+    venus:   [0.72333566,0.00000390, 0.00677672,-0.00004107, 3.39467605,0.00078890, 181.97909950,58517.81538729, 131.60246718,0.00268329, 76.67984255,-0.27769418],
+    earth:   [1.00000261,0.00000562, 0.01671123,-0.00004392, 0.00005,-0.01294668, 100.46457166,35999.37244981, 102.93768193,0.32327364, 0.0,0.0],
+    mars:    [1.52371034,0.00001847, 0.09339410,0.00007882, 1.84969142,-0.00813131, -4.55343205,19140.30268499, -23.94362959,0.44441088, 49.55953891,-0.29257343],
+    jupiter: [5.20288700,-0.00011607, 0.04838624,-0.00013253, 1.30439695,-0.00183714, 34.39644051,3034.74612775, 14.72847983,0.21252668, 100.47390909,0.20469106],
+    saturn:  [9.53667594,-0.00125060, 0.05386179,-0.00050991, 2.48599187,0.00193609, 49.95424423,1222.49362201, 92.59887831,-0.41897216, 113.66242448,-0.28867794],
+    uranus:  [19.18916464,-0.00196176, 0.04725744,-0.00004397, 0.77263783,-0.00242939, 313.23810451,428.48202785, 170.95427630,0.40805281, 74.01692503,0.04240589],
+    neptune: [30.06992276,0.00026291, 0.00859048,0.00005105, 1.77004347,0.00035372, -55.12002969,218.45945325, 44.96476227,-0.32241464, 131.78422574,-0.00508664]
+  };
+  var ORDER = ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'];
+  var INFO = {
+    mercury: { name: '水星', col: [0.80, 0.76, 0.70], size: 4.5, scope: '镜' },
+    venus:   { name: '金星', col: [0.98, 0.92, 0.72], size: 7.5 },
+    earth:   { name: '地球', col: [0.40, 0.72, 1.00], size: 7.5 },
+    mars:    { name: '火星', col: [1.00, 0.52, 0.36], size: 5.5 },
+    jupiter: { name: '木星', col: [0.95, 0.82, 0.64], size: 13.5 },
+    saturn:  { name: '土星', col: [0.96, 0.88, 0.64], size: 11.5, scope: '镜' },
+    uranus:  { name: '天王星', col: [0.60, 0.93, 0.90], size: 8.5, scope: '镜' },
+    neptune: { name: '海王星', col: [0.45, 0.62, 1.00], size: 8.5, scope: '镜' }
+  };
+  var J2000 = Date.UTC(2000, 0, 1, 12, 0, 0);
+  function centuries(ms) { return (ms - J2000) / 86400000 / 36525; }
+
+  // 月球：Meeus 简化式（黄经/黄纬/距离），供月相显示与地月插图（超级月亮另见 supermoon/）
+  function moonEph(ms) {
+    var T = centuries(ms), r = D2R;
+    var Lp = 218.3164477 + 481267.88123421 * T;
+    var D  = 297.8501921 + 445267.1114034 * T;
+    var M  = 357.5291092 + 35999.0502909 * T;
+    var Mp = 134.9633964 + 477198.8675055 * T;
+    var F  = 93.2720950 + 483202.0175233 * T;
+    var lam = Lp + 6.288774 * Math.sin(Mp * r) + 1.274027 * Math.sin((2 * D - Mp) * r)
+      + 0.658314 * Math.sin(2 * D * r) + 0.213618 * Math.sin(2 * Mp * r)
+      - 0.185116 * Math.sin(M * r) - 0.114332 * Math.sin(2 * F * r)
+      + 0.058793 * Math.sin((2 * D - 2 * Mp) * r) + 0.057066 * Math.sin((2 * D - M - Mp) * r);
+    var dist = 385000.56 - 20905.355 * Math.cos(Mp * r) - 3699.111 * Math.cos((2 * D - Mp) * r)
+      - 2955.968 * Math.cos(2 * D * r) - 569.925 * Math.cos(2 * Mp * r)
+      + 246.158 * Math.cos((2 * D - 2 * Mp) * r) - 204.586 * Math.cos((M - Mp) * r);
+    return { lam: norm360(lam), dist: dist };
+  }
+  function moonPhase(ms) {           // 月相对太阳的黄经差（0=朔 180=望）
+    var T = centuries(ms), m = moonEph(ms);
+    var e2 = helio('earth', T);
+    var ls = norm360(Math.atan2(-e2.y, -e2.x) / D2R);
+    return norm360(m.lam - ls);
+  }
+
+  function helio(key, T, Mopt) {    // 日心黄道坐标（AU）；Mopt 用于轨道整圈采样
+    var e = EL[key];
+    var a = e[0] + e[1] * T, ec = e[2] + e[3] * T, inc = (e[4] + e[5] * T) * D2R;
+    var L = norm360(e[6] + e[7] * T), pb = norm360(e[8] + e[9] * T), om = norm360(e[10] + e[11] * T);
+    var M = Mopt !== undefined ? Mopt : (L - pb) * D2R;
+    var w = (pb - om) * D2R, O = om * D2R;
+    var E = M;
+    for (var k = 0; k < 6; k++) E -= (E - ec * Math.sin(E) - M) / (1 - ec * Math.cos(E));
+    var xp = a * (Math.cos(E) - ec), yp = a * Math.sqrt(1 - ec * ec) * Math.sin(E);
+    var cw = Math.cos(w), sw = Math.sin(w), cO = Math.cos(O), sO = Math.sin(O), ci = Math.cos(inc), si = Math.sin(inc);
+    return {
+      x: (cw * cO - sw * sO * ci) * xp + (-sw * cO - cw * sO * ci) * yp,
+      y: (cw * sO + sw * cO * ci) * xp + (-sw * sO + cw * cO * ci) * yp,
+      z: (sw * si) * xp + (cw * si) * yp
+    };
+  }
+
+  // ================= 天象计算 =================
+  var VIS_MIN = 10;                 // 距日角距下限（度）：暮光末能见
+  var sim = { ms: Date.UTC(2025, 1, 28, 12, 0, 0), speed: 2, playing: false };
+  var T0_MS = Date.UTC(2006, 0, 1), T1_MS = Date.UTC(2046, 11, 31);
+  var EVENTS = [
+    { ms: Date.UTC(2025, 1, 28, 12), tag: '黄昏七星' },
+    { ms: Date.UTC(2026, 1, 28, 12), tag: '七星之夜' },
+    { ms: Date.UTC(2026, 10, 14, 12), tag: '四星晨聚' }
+  ];
+
+  var astro = null;                 // 本帧天象缓存
+  function computeAstro(ms) {
+    var T = centuries(ms);
+    var pos = {}, lam = {};
+    ORDER.forEach(function (k) { pos[k] = helio(k, T); });
+    var e = pos.earth;
+    var lamSun = Math.atan2(-e.y, -e.x) / D2R;                     // 太阳视黄经
+    ORDER.forEach(function (k) {
+      if (k === 'earth') return;
+      var g = pos[k];
+      lam[k] = Math.atan2(g.y - e.y, g.x - e.x) / D2R;             // 地心视黄经
+    });
+    var eve = [], mor = [];
+    ORDER.forEach(function (k) {
+      if (k === 'earth') return;
+      var elE = norm360(lam[k] - lamSun);                          // 距太阳东侧角距
+      var elW = 360 - elE;
+      if (elE >= VIS_MIN && elE <= 180) eve.push({ k: k, el: elE });
+      else if (elW >= VIS_MIN && elW <= 180) mor.push({ k: k, el: elW });
+    });
+    eve.sort(function (a, b) { return a.el - b.el; });
+    mor.sort(function (a, b) { return a.el - b.el; });
+    var spread = eve.length >= 2 ? eve[eve.length - 1].el - eve[0].el : 0;
+    return { pos: pos, lamSun: lamSun, lam: lam, eve: eve, mor: mor, spread: spread, T: T };
+  }
+
+  // ================= WebGL 程序 =================
+  function compile(type, src) {
+    var sh = gl.createShader(type);
+    gl.shaderSource(sh, src); gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh));
+    return sh;
+  }
+  function makeProg(vsId, fsId) {
+    var prog = gl.createProgram();
+    gl.attachShader(prog, compile(gl.VERTEX_SHADER, document.getElementById(vsId).textContent));
+    gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, document.getElementById(fsId).textContent));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+    return prog;
+  }
+  var progP, progC, progB, progP3, progC3, UP = {}, UC = {}, UB = {}, AP = {}, AC = {}, UP3 = {}, UC3 = {}, AP3 = {}, AC3 = {};
+  try {
+    progP = makeProg('vs-pt', 'fs-pt');
+    progC = makeProg('vs-pr', 'fs-pr');
+    progB = makeProg('vs-full', 'fs-bg');
+    progP3 = makeProg('vs3-pt', 'fs-pt');
+    progC3 = makeProg('vs3-pr', 'fs-pr');
+  } catch (e) { showError('着色器编译失败：\n' + e.message); return; }
+  ['uVP', 'uDpr'].forEach(function (n) { UP[n] = gl.getUniformLocation(progP, n); });
+  ['uVP'].forEach(function (n) { UC[n] = gl.getUniformLocation(progC, n); });
+  ['uMVP', 'uDpr'].forEach(function (n) { UP3[n] = gl.getUniformLocation(progP3, n); });
+  ['uMVP'].forEach(function (n) { UC3[n] = gl.getUniformLocation(progC3, n); });
+  ['uVP', 'uDpr', 'uCanvasH', 'uMode', 'uSunPt', 'uHorizon', 'uT'].forEach(function (n) { UB[n] = gl.getUniformLocation(progB, n); });
+  AP.aPos = gl.getAttribLocation(progP, 'aPos');
+  AP.aColor = gl.getAttribLocation(progP, 'aColor');
+  AP.aSize = gl.getAttribLocation(progP, 'aSize');
+  AC.aPos = gl.getAttribLocation(progC, 'aPos');
+  AC.aColor = gl.getAttribLocation(progC, 'aColor');
+  AP3.aPos = gl.getAttribLocation(progP3, 'aPos');
+  AP3.aColor = gl.getAttribLocation(progP3, 'aColor');
+  AP3.aSize = gl.getAttribLocation(progP3, 'aSize');
+  AC3.aPos = gl.getAttribLocation(progC3, 'aPos');
+  AC3.aColor = gl.getAttribLocation(progC3, 'aColor');
+  var aFull = gl.getAttribLocation(progB, 'aPos');
+
+  var bQuad = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, bQuad);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  var bPrim = gl.createBuffer();    // 线/三角 动态缓冲
+  var bPts = gl.createBuffer();     // 点动态缓冲
+
+  var VP = { L: { x: 0, y: 0, w: 100, h: 100 }, R: { x: 0, y: 0, w: 100, h: 100 } };
+  var W = 0, H = 0, dpr = 1, MID_SPLIT = 0.58;
+  var zoom = 1;   // 左侧俯视图缩放（滚轮 / 触控板捏合 / 双指捏合，双击复位）
+  function applyVP(v) { gl.viewport(v.x * dpr, (H - v.y - v.h) * dpr, v.w * dpr, v.h * dpr); }
+
+  // ---- 图元绘制（线/三角）----
+  var primArr = [];
+  function P(x, y, r, g, b, a) { primArr.push(x, y, r, g, b, a); }
+  function flushPrims(mode, vp) {
+    if (!primArr.length) return;
+    gl.useProgram(progC);
+    gl.uniform4f(UC.uVP, vp.x, vp.y, vp.w, vp.h);
+    gl.bindBuffer(gl.ARRAY_BUFFER, bPrim);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(primArr), gl.DYNAMIC_DRAW);
+    gl.enableVertexAttribArray(AC.aPos);
+    gl.vertexAttribPointer(AC.aPos, 2, gl.FLOAT, false, 24, 0);
+    gl.enableVertexAttribArray(AC.aColor);
+    gl.vertexAttribPointer(AC.aColor, 4, gl.FLOAT, false, 24, 8);
+    gl.drawArrays(mode, 0, primArr.length / 6);
+    primArr.length = 0;
+  }
+  // ---- 点精灵绘制 ----
+  var ptArr = [];
+  function PT(x, y, r, g, b, a, size) { ptArr.push(x, y, r, g, b, a, size); }
+  function flushPts(vp) {
+    if (!ptArr.length) return;
+    gl.useProgram(progP);
+    gl.uniform4f(UP.uVP, vp.x, vp.y, vp.w, vp.h);
+    gl.uniform1f(UP.uDpr, dpr);
+    gl.bindBuffer(gl.ARRAY_BUFFER, bPts);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(ptArr), gl.DYNAMIC_DRAW);
+    gl.enableVertexAttribArray(AP.aPos);
+    gl.vertexAttribPointer(AP.aPos, 2, gl.FLOAT, false, 28, 0);
+    gl.enableVertexAttribArray(AP.aColor);
+    gl.vertexAttribPointer(AP.aColor, 4, gl.FLOAT, false, 28, 8);
+    gl.enableVertexAttribArray(AP.aSize);
+    gl.vertexAttribPointer(AP.aSize, 1, gl.FLOAT, false, 28, 24);
+    gl.drawArrays(gl.POINTS, 0, ptArr.length / 7);
+
+  }
+  function drawBg(vp, mode, sunPt, horizon, tSec) {
+    applyVP(vp);
+    gl.useProgram(progB);
+    gl.uniform4f(UB.uVP, vp.x, vp.y, vp.w, vp.h);
+    gl.uniform1f(UB.uDpr, dpr);
+    gl.uniform1f(UB.uCanvasH, H);
+    gl.uniform1f(UB.uMode, mode);
+    gl.uniform2f(UB.uSunPt, sunPt ? sunPt[0] : 0, sunPt ? sunPt[1] : 0);
+    gl.uniform1f(UB.uHorizon, horizon || 0);
+    gl.uniform1f(UB.uT, tSec);
+    gl.enableVertexAttribArray(aFull);
+    gl.bindBuffer(gl.ARRAY_BUFFER, bQuad);
+    gl.vertexAttribPointer(aFull, 2, gl.FLOAT, false, 0, 0);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
+  // ================= 标签 =================
+  var lblLayer = document.getElementById('lblLayer');
+  function makeLbl(cls) {
+    var d = document.createElement('div');
+    d.className = 'lbl' + (cls ? ' ' + cls : '');
+    lblLayer.appendChild(d);
+    return d;
+  }
+  function setLbl(el, x, y, html, visible) {
+    if (!visible) { el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    if (el.innerHTML !== html) el.innerHTML = html;
+  }
+  // 标签垂直避让：横向范围重叠的标签按 y 排序后逐个下移一行，消除堆叠
+  function estLblW(html) {
+    var s = html.replace(/<[^>]+>/g, '');
+    var w = 18;
+    for (var i = 0; i < s.length; i++) w += s.charCodeAt(i) > 255 ? 11.5 : 6;
+    return w;
+  }
+  function declutter(items) {
+    var minDy = 24;
+    items.forEach(function (it) { it.w = estLblW(it.html); });
+    items.sort(function (a, b) { return a.y - b.y; });
+    for (var i = 1; i < items.length; i++) {
+      for (var j = 0; j < i; j++) {
+        if (Math.abs(items[i].x - items[j].x) < (items[i].w + items[j].w) / 2 + 6) {
+          var need = items[j].y + minDy;
+          if (items[i].y < need) items[i].y = need;
+        }
+      }
+    }
+    items.forEach(function (it) { setLbl(it.el, it.x, it.y, it.html, it.show); });
+  }
+  var orrLbl = {}, skyLbl = {};
+  ORDER.forEach(function (k) {
+    orrLbl[k] = makeLbl();
+    if (k !== 'earth') skyLbl[k] = makeLbl();
+  });
+  var sunSkyLbl = makeLbl('tag');
+  var spreadLbl = makeLbl('spread');
+  var strLbl = makeLbl('spread');
+  var skyTitleLbl = makeLbl('tag');
+  var dawnLbl = makeLbl('tag');
+  var eclLbl = makeLbl('tag');
+  var westLbl = makeLbl('tag'), eastLbl = makeLbl('tag');
+  var moonLbl3 = makeLbl();
+
+  // ================= 左视图：太阳系俯视 =================
+  var RAD_EXP = 0.6, R_MAX = 30.06992276;      // 径向压缩指数 / 海王星半长轴
+  function mapXY(x, y, cx, cy, R) {             // 黄道坐标 → 屏幕（北极俯视，逆时针为东）
+    var ang = Math.atan2(y, x), rr = Math.hypot(x, y);
+    var rp = R * Math.pow(rr / R_MAX, RAD_EXP);
+    return [cx + Math.cos(ang) * rp, cy - Math.sin(ang) * rp];
+  }
+  function drawOrrery(a, tSec) {
+    var vp = VP.L, cx = vp.w * 0.5, cy = vp.h * 0.5;
+    var R = Math.min(vp.w, vp.h) * 0.46 * zoom;
+    var showOrbits = document.getElementById('orbits').checked;
+    var showWedge = document.getElementById('wedge').checked;
+
+    // 轨道线（真椭圆整圈采样）
+    if (showOrbits) {
+      ORDER.forEach(function (k) {
+        var e = EL[k], c = INFO[k].col, N = 140;
+        var prev = null;
+        for (var i = 0; i <= N; i++) {
+          var p = helio(k, a.T, i / N * 2 * Math.PI);
+          var pt = mapXY(p.x, p.y, cx, cy, R);
+          if (prev) { P(prev[0], prev[1], c[0], c[1], c[2], 0.16); P(pt[0], pt[1], c[0], c[1], c[2], 0.16); }
+          prev = pt;
+        }
+      });
+      flushPrims(gl.LINES, vp);
+    }
+
+    // 黄昏视域扇区（地球反日方向 ±82°）+ 晨侧扇区（向日 ±82°）
+    var e = a.pos.earth, ePt = mapXY(e.x, e.y, cx, cy, R);
+    var sunAng = a.lamSun * D2R;
+    function wedge(centerAng, cr, cg, cb, alpha) {
+      var half = 82 * D2R, R2 = R * 1.06;
+      var a0 = centerAng - half, a1 = centerAng + half, am = centerAng;
+      function rimPt(ang) {
+        return [ePt[0] + Math.cos(ang) * R2, ePt[1] - Math.sin(ang) * R2];
+      }
+      var p0 = rimPt(a0), p1 = rimPt(am), p2 = rimPt(a1);
+      P(ePt[0], ePt[1], cr, cg, cb, 0);
+      P(p0[0], p0[1], cr, cg, cb, alpha); P(p1[0], p1[1], cr, cg, cb, alpha * 0.9);
+      P(ePt[0], ePt[1], cr, cg, cb, 0);
+      P(p1[0], p1[1], cr, cg, cb, alpha * 0.9); P(p2[0], p2[1], cr, cg, cb, alpha);
+    }
+    if (showWedge) {
+      wedge(sunAng + Math.PI, 0.70, 0.45, 1.00, 0.10);        // 夜侧（黄昏可见区）
+      wedge(sunAng, 1.00, 0.62, 0.25, 0.05);                  // 向日侧（清晨可见区）
+      flushPrims(gl.TRIANGLES, vp);
+      // 反日方向射线（线）
+      var anti = sunAng + Math.PI;
+      P(ePt[0], ePt[1], 0.70, 0.45, 1.0, 0.5);
+      P(ePt[0] + Math.cos(anti) * R * 1.1, ePt[1] - Math.sin(anti) * R * 1.1, 0.70, 0.45, 1.0, 0.5);
+      flushPrims(gl.LINES, vp);
+    }
+
+    // 黄昏连珠串：当晚可见行星按角距连成一串——"哪几颗连到一起"一眼可辨
+    if (a.eve.length >= 2) {
+      var chPts = a.eve.map(function (v) {
+        return mapXY(a.pos[v.k].x, a.pos[v.k].y, cx, cy, R);
+      });
+      // 主链 + 四方向偏移的淡链 = 伪加宽辉光
+      var offs = [[0, 0, 0.9], [1, 0, 0.15], [-1, 0, 0.15], [0, 1, 0.15], [0, -1, 0.15]];
+      offs.forEach(function (o) {
+        for (var ci = 1; ci < chPts.length; ci++) {
+          P(chPts[ci - 1][0] + o[0], chPts[ci - 1][1] + o[1], 0.80, 0.62, 1.0, o[2]);
+          P(chPts[ci][0] + o[0], chPts[ci][1] + o[1], 0.80, 0.62, 1.0, o[2]);
+        }
+      });
+      flushPrims(gl.LINES, vp);
+      var mid = chPts[Math.floor(chPts.length / 2)];
+      setLbl(strLbl, mid[0] + VP.L.x, mid[1] + VP.L.y - 14,
+             '黄昏连珠 · ' + CN[a.eve.length] + ' 颗', true);
+    } else {
+      setLbl(strLbl, 0, 0, '', false);
+    }
+
+    // 太阳（晕 + 芯）
+    PT(cx, cy, 1.0, 0.82, 0.45, 0.5, 52);
+    PT(cx, cy, 1.0, 0.98, 0.85, 1.0, 13);
+    // 地球观测点十字（线）
+    P(ePt[0] - 12, ePt[1], 0.4, 0.95, 1.0, 0.8); P(ePt[0] + 12, ePt[1], 0.4, 0.95, 1.0, 0.8);
+    P(ePt[0], ePt[1] - 12, 0.4, 0.95, 1.0, 0.8); P(ePt[0], ePt[1] + 12, 0.4, 0.95, 1.0, 0.8);
+    flushPrims(gl.LINES, vp);
+
+    // 行星（点 + 标签；标签经垂直避让消除堆叠）
+    var showLbl = document.getElementById('labels').checked;
+    var lblItems = [];
+    ORDER.forEach(function (k) {
+      var p = a.pos[k], pt = mapXY(p.x, p.y, cx, cy, R);
+      var inf = INFO[k];
+      var vis = k !== 'earth' && a.eve.some(function (v) { return v.k === k; });
+      PT(pt[0], pt[1], inf.col[0], inf.col[1], inf.col[2], vis ? 1.0 : 0.8, inf.size + (vis ? 3 : 0));
+      if (vis) PT(pt[0], pt[1], 0.70, 0.45, 1.0, 0.55, inf.size * 2.6);   // 黄昏可见：紫色光晕
+      lblItems.push({
+        el: orrLbl[k], x: pt[0] + VP.L.x, y: pt[1] + VP.L.y - 12, show: showLbl,
+        html: inf.name + (vis ? ' <small>今晚可见</small>' : (k === 'earth' ? ' <small>观测点</small>' : ''))
+      });
+    });
+    declutter(lblItems);
+    flushPts(vp);
+  }
+
+  // ================= 三维视角（俯视 <-> 3D 切换） =================
+  // 世界坐标：Y 轴 = 黄道北，径向按 (r/30AU)^0.6 压缩（与 2D 一致），角度/倾角真实
+  var ORR_MODE = '3d';               // 默认三维打开（可切回俯视 2D）
+  var cam3 = { yaw: 0.6, pitch: 0.40, dist: 3.0 };
+  var autoRot = true;                // 未拖动前缓慢自转，强调立体
+  function norm3(v) { var l = Math.hypot(v[0], v[1], v[2]); return [v[0] / l, v[1] / l, v[2] / l]; }
+  function cross3(a2, b2) {
+    return [a2[1] * b2[2] - a2[2] * b2[1], a2[2] * b2[0] - a2[0] * b2[2], a2[0] * b2[1] - a2[1] * b2[0]];
+  }
+  function mat4Mul(a2, b2) {
+    var o = new Float32Array(16);
+    for (var c2 = 0; c2 < 4; c2++) for (var r2 = 0; r2 < 4; r2++) {
+      o[c2 * 4 + r2] = a2[r2] * b2[c2 * 4] + a2[4 + r2] * b2[c2 * 4 + 1] + a2[8 + r2] * b2[c2 * 4 + 2] + a2[12 + r2] * b2[c2 * 4 + 3];
+    }
+    return o;
+  }
+  function mat4Persp(fovY, aspect, near, far2) {
+    var f2 = 1 / Math.tan(fovY / 2);
+    return new Float32Array([f2 / aspect, 0, 0, 0, 0, f2, 0, 0, 0, 0, (far2 + near) / (near - far2), -1, 0, 0, 2 * far2 * near / (near - far2), 0]);
+  }
+  function mat4LookAt(eye, at, up) {
+    var f2 = norm3([at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]]);
+    var s2 = norm3(cross3(f2, up));
+    var u2 = cross3(s2, f2);
+    return new Float32Array([
+      s2[0], u2[0], -f2[0], 0,
+      s2[1], u2[1], -f2[1], 0,
+      s2[2], u2[2], -f2[2], 0,
+      -(s2[0] * eye[0] + s2[1] * eye[1] + s2[2] * eye[2]),
+      -(u2[0] * eye[0] + u2[1] * eye[1] + u2[2] * eye[2]),
+      (f2[0] * eye[0] + f2[1] * eye[1] + f2[2] * eye[2]), 1]);
+  }
+  function toWorld(p) {              // 黄道坐标（x,y 平面，z 北）→ 世界（Y 上）
+    var r = Math.hypot(p.x, p.y, p.z) || 1e-9;
+    var rc = Math.pow(r / R_MAX, RAD_EXP);
+    var s = rc / r;
+    return [p.x * s, p.z * s, -p.y * s];
+  }
+  var prim3Arr = [], pt3Arr = [];
+  function P3(x, y, z, r, g, b, a2) { prim3Arr.push(x, y, z, r, g, b, a2); }
+  function PT3(x, y, z, r, g, b, a2, size) { pt3Arr.push(x, y, z, r, g, b, a2, size); }
+  var bPrim3 = gl.createBuffer(), bPts3 = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, bPrim3);
+  gl.bufferData(gl.ARRAY_BUFFER, 240000, gl.DYNAMIC_DRAW);
+  gl.bindBuffer(gl.ARRAY_BUFFER, bPts3);
+  gl.bufferData(gl.ARRAY_BUFFER, 120000, gl.DYNAMIC_DRAW);
+  function flushPrims3(mode, mvp) {
+    if (!prim3Arr.length) return;
+    gl.useProgram(progC3);
+    gl.uniformMatrix4fv(UC3.uMVP, false, mvp);
+    gl.bindBuffer(gl.ARRAY_BUFFER, bPrim3);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, new Float32Array(prim3Arr));
+    gl.enableVertexAttribArray(AC3.aPos);
+    gl.vertexAttribPointer(AC3.aPos, 3, gl.FLOAT, false, 28, 0);
+    gl.enableVertexAttribArray(AC3.aColor);
+    gl.vertexAttribPointer(AC3.aColor, 4, gl.FLOAT, false, 28, 12);
+    gl.drawArrays(mode, 0, prim3Arr.length / 7);
+    prim3Arr.length = 0;
+  }
+  function flushPts3(mvp) {
+    if (!pt3Arr.length) return;
+    gl.useProgram(progP3);
+    gl.uniformMatrix4fv(UP3.uMVP, false, mvp);
+    gl.uniform1f(UP3.uDpr, dpr);
+    gl.bindBuffer(gl.ARRAY_BUFFER, bPts3);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, new Float32Array(pt3Arr));
+    gl.enableVertexAttribArray(AP3.aPos);
+    gl.vertexAttribPointer(AP3.aPos, 3, gl.FLOAT, false, 32, 0);
+    gl.enableVertexAttribArray(AP3.aColor);
+    gl.vertexAttribPointer(AP3.aColor, 4, gl.FLOAT, false, 32, 12);
+    gl.enableVertexAttribArray(AP3.aSize);
+    gl.vertexAttribPointer(AP3.aSize, 1, gl.FLOAT, false, 32, 28);
+    gl.drawArrays(gl.POINTS, 0, pt3Arr.length / 8);
+    pt3Arr.length = 0;
+  }
+
+  function drawOrrery3D(a, tSec) {
+    var vp = VP.L;
+    applyVP(vp);
+    var eye = [cam3.dist * Math.cos(cam3.pitch) * Math.sin(cam3.yaw),
+               cam3.dist * Math.sin(cam3.pitch),
+               cam3.dist * Math.cos(cam3.pitch) * Math.cos(cam3.yaw)];
+    var view = mat4LookAt(eye, [0, 0, 0], [0, 1, 0]);
+    var proj = mat4Persp(0.9, vp.w / Math.max(vp.h, 1), 0.02, 40);
+    var mvp = mat4Mul(proj, view);
+    // 黄道面半透明盘（让平面有"面"的感觉）
+    var ND2 = 48;
+    for (var dd = 0; dd < ND2; dd++) {
+      var a0 = dd / ND2 * Math.PI * 2, a1 = (dd + 1) / ND2 * Math.PI * 2;
+      P3(0, 0, 0, 0.20, 0.28, 0.50, 0.045);
+      P3(Math.cos(a0) * 1.04, 0, -Math.sin(a0) * 1.04, 0.20, 0.28, 0.50, 0.045);
+      P3(Math.cos(a1) * 1.04, 0, -Math.sin(a1) * 1.04, 0.20, 0.28, 0.50, 0.045);
+    }
+    flushPrims3(gl.TRIANGLES, mvp);
+    // 黄道参考环（AU 标尺）
+    var rings = [[0.107, '1 AU'], [0.35, '5 AU'], [0.58, '10 AU'], [1.0, '30 AU']];
+    rings.forEach(function (rg) {
+      for (var k = 0; k < 72; k++) {
+        var a0 = k / 72 * Math.PI * 2, a1 = (k + 1) / 72 * Math.PI * 2;
+        P3(Math.cos(a0) * rg[0], 0, -Math.sin(a0) * rg[0], 0.28, 0.36, 0.55, 0.12);
+        P3(Math.cos(a1) * rg[0], 0, -Math.sin(a1) * rg[0], 0.28, 0.36, 0.55, 0.12);
+      }
+    });
+    flushPrims3(gl.LINES, mvp);
+    // 轨道（真实倾角的整圈椭圆）
+    ORDER.forEach(function (k) {
+      var c = INFO[k].col, N = 128;
+      for (var i = 0; i < N; i++) {
+        var p = helio(k, a.T, i / N * 2 * Math.PI);
+        var w = toWorld(p);
+        P3(w[0], w[1], w[2], c[0], c[1], c[2], 0.30);
+      }
+      flushPrims3(gl.LINE_LOOP, mvp);
+    });
+    // 黄昏视域扇面（地球反日方向 ±82°，铺在黄道面上）
+    var e = a.pos.earth, eW = toWorld(e);
+    var sunDir = [Math.cos(a.lamSun * D2R), 0, -Math.sin(a.lamSun * D2R)];   // 黄道面内向日方向
+    var anti = [-sunDir[0], 0, -sunDir[2]], R2 = 1.25;
+    if (document.getElementById('wedge').checked) {
+      [-82 * D2R, -41 * D2R, 0, 41 * D2R, 82 * D2R].forEach(function (half, idx, arr) {
+        var d0 = [anti[0] * Math.cos(half) - anti[2] * Math.sin(half), 0,
+                  anti[0] * Math.sin(half) + anti[2] * Math.cos(half)];
+        var h2 = arr[idx + 1];
+        var d1 = [anti[0] * Math.cos(h2) - anti[2] * Math.sin(h2), 0,
+                  anti[0] * Math.sin(h2) + anti[2] * Math.cos(h2)];
+        P3(eW[0], eW[1], eW[2], 0.70, 0.45, 1.0, 0);
+        P3(eW[0] + d0[0] * R2, eW[1], eW[2] + d0[2] * R2, 0.70, 0.45, 1.0, 0.09);
+        P3(eW[0] + d1[0] * R2, eW[1], eW[2] + d1[2] * R2, 0.70, 0.45, 1.0, 0.09);
+      });
+      flushPrims3(gl.TRIANGLES, mvp);
+      P3(eW[0], eW[1], eW[2], 0.7, 0.45, 1.0, 0.55);
+      P3(eW[0] + anti[0] * 1.3, eW[1], eW[2] + anti[2] * 1.3, 0.7, 0.45, 1.0, 0.55);
+      flushPrims3(gl.LINES, mvp);
+    }
+    // 连珠串（黄昏可见行星，3D 里更直观：不是直线，是扇形弧带）
+    var showLbl = document.getElementById('labels').checked;
+    var lblItems = [], chPts = [];
+    if (a.eve.length >= 2) {
+      a.eve.forEach(function (v) { chPts.push(toWorld(a.pos[v.k])); });
+      for (var ci = 1; ci < chPts.length; ci++) {
+        P3(chPts[ci - 1][0], chPts[ci - 1][1], chPts[ci - 1][2], 0.80, 0.62, 1.0, 0.85);
+        P3(chPts[ci][0], chPts[ci][1], chPts[ci][2], 0.80, 0.62, 1.0, 0.85);
+      }
+      flushPrims3(gl.LINES, mvp);
+    }
+    // 太阳 + 行星（发光点，透视近大远小）
+    PT3(0, 0, 0, 1.0, 0.82, 0.45, 0.45, 85);
+    PT3(0, 0, 0, 1.0, 0.98, 0.85, 1.0, 24);
+    function projLbl(w) {           // 世界 → 屏幕标签位置
+      var cx2 = mvp[0] * w[0] + mvp[4] * w[1] + mvp[8] * w[2] + mvp[12];
+      var cy2 = mvp[1] * w[0] + mvp[5] * w[1] + mvp[9] * w[2] + mvp[13];
+      var cw2 = mvp[3] * w[0] + mvp[7] * w[1] + mvp[11] * w[2] + mvp[15];
+      if (cw2 <= 0.01) return null;
+      return [vp.x + (cx2 / cw2 * 0.5 + 0.5) * vp.w, vp.y + (1 - (cy2 / cw2 * 0.5 + 0.5)) * vp.h];
+    }
+    ORDER.forEach(function (k) {
+      var w = toWorld(a.pos[k]), inf = INFO[k];
+      var vis = k !== 'earth' && a.eve.some(function (v) { return v.k === k; });
+      // 吊线：行星 → 黄道面（垂直高度一目了然）
+      if (Math.abs(w[1]) > 0.004) {
+        P3(w[0], w[1], w[2], inf.col[0], inf.col[1], inf.col[2], 0.4);
+        P3(w[0], 0, w[2], inf.col[0], inf.col[1], inf.col[2], 0.12);
+      }
+      PT3(w[0], w[1], w[2], inf.col[0], inf.col[1], inf.col[2], vis ? 1.0 : 0.8, (inf.size + (vis ? 2 : 0)) * 2.0);
+      if (vis) PT3(w[0], w[1], w[2], 0.70, 0.45, 1.0, 0.35, inf.size * 5.2);
+      var sp2 = projLbl(w);
+      if (sp2) lblItems.push({ el: orrLbl[k], x: sp2[0], y: sp2[1] - 12, show: showLbl,
+                               html: inf.name + (vis ? ' <small>今晚可见</small>' : (k === 'earth' ? ' <small>观测点</small>' : '')) });
+      else setLbl(orrLbl[k], 0, 0, '', false);
+    });
+    // 地月系放大插图：地球旁画放大 ~90 倍的月轨环 + 月球（真实 0.0026 AU 在此比例下不可见）
+    var meph = moonEph(sim.ms), ph2 = moonPhase(sim.ms);
+    var mR = 0.030, eR3 = 0.012;
+    for (var mi = 0; mi < 48; mi++) {
+      var ma0 = mi / 48 * Math.PI * 2, ma1 = (mi + 1) / 48 * Math.PI * 2;
+      P3(eW[0] + Math.cos(ma0) * mR, 0, eW[2] + Math.sin(ma0) * mR, 0.82, 0.86, 1.0, 0.20);
+      P3(eW[0] + Math.cos(ma1) * mR, 0, eW[2] + Math.sin(ma1) * mR, 0.82, 0.86, 1.0, 0.20);
+    }
+    flushPrims3(gl.LINES, mvp);
+    var mAng = ph2 * D2R;
+    var mw = [eW[0] + Math.cos(mAng) * mR, eW[1] + 0.012, eW[2] + Math.sin(mAng) * mR];
+    PT3(mw[0], mw[1], mw[2], 0.87, 0.89, 0.95, 1.0, 21);
+    PT3(mw[0], mw[1], mw[2], 0.55, 0.57, 0.66, 0.45, 48);
+    var msp3 = projLbl(mw);
+    if (msp3) lblItems.push({ el: moonLbl3, x: msp3[0], y: msp3[1] - 10, show: showLbl,
+      html: '月球 <small>' + Math.round(meph.dist) + ' km</small>' });
+    else setLbl(moonLbl3, 0, 0, '', false);
+    // 连珠串压在地月插图之上
+    flushPrims3(gl.LINES, mvp);       // 吊线
+    flushPts3(mvp);
+    if (chPts.length >= 2) {
+      var mid = chPts[Math.floor(chPts.length / 2)], mp2 = projLbl(mid);
+      if (mp2) lblItems.push({ el: strLbl, x: mp2[0], y: mp2[1] - 14, show: true, html: '黄昏连珠 · ' + CN[a.eve.length] + ' 颗（扇形弧带）' });
+      else setLbl(strLbl, 0, 0, '', false);
+    } else setLbl(strLbl, 0, 0, '', false);
+    declutter(lblItems);
+  }
+
+  // ================= 右视图：地球黄昏天空 =================
+  function drawSky(a, tSec) {
+    var vp = VP.R, W2 = vp.w, H2 = vp.h;
+    var hor = H2 * 0.80;
+    var sunPt = [W2 * 0.16, hor + 10];
+    drawBg(vp, 1, sunPt, hor, tSec);
+    applyVP(vp);
+    var vpL = { x: 0, y: 0, w: vp.w, h: vp.h };   // drawSky 内部用视区局部坐标，uVP 原点归零
+
+    // 黄道主弧（西→东，日落后行星沿它排列）
+    function bez(p0, p1, p2, t) {
+      var u = 1 - t;
+      return [u * u * p0[0] + 2 * u * t * p1[0] + t * t * p2[0],
+              u * u * p0[1] + 2 * u * t * p1[1] + t * t * p2[1]];
+    }
+    var A0 = sunPt, A1 = [W2 * 0.58, H2 * 0.02], A2 = [W2 * 0.92, hor + 6];
+    // 主弧（虚线加粗）
+    var N = 46;
+    for (var i = 0; i < N; i += 2) {
+      var q0 = bez(A0, A1, A2, i / N), q1 = bez(A0, A1, A2, (i + 1) / N);
+      P(q0[0], q0[1], 0.62, 0.74, 1.0, 0.5); P(q1[0], q1[1], 0.62, 0.74, 1.0, 0.5);
+    }
+    // 地平线
+    P(6, hor, 0.85, 0.75, 0.6, 0.45); P(W2 - 6, hor, 0.85, 0.75, 0.6, 0.45);
+    // 地下晨星弧（黎明可见的行星沉在地平线下）
+    var B0 = sunPt, B1 = [W2 * 0.30, H2 * 0.99], B2 = [W2 * 0.52, H2 - 8];
+    for (i = 0; i < 18; i += 2) {
+      var r0 = bez(B0, B1, B2, i / 18), r1 = bez(B0, B1, B2, (i + 1) / 18);
+      P(r0[0], r0[1], 0.6, 0.6, 0.7, 0.18); P(r1[0], r1[1], 0.6, 0.6, 0.7, 0.18);
+    }
+    // 张角括弧（黄昏可见行星首尾之间）
+    var showLbl = document.getElementById('labels').checked;
+    var spreadPos = null;
+    if (a.eve.length >= 2) {
+      var sA = clamp((a.eve[0].el - VIS_MIN) / (180 - VIS_MIN), 0, 1);
+      var sB = clamp((a.eve[a.eve.length - 1].el - VIS_MIN) / (180 - VIS_MIN), 0, 1);
+      for (i = 0; i <= 14; i++) {
+        var tt = sA + (sB - sA) * i / 14;
+        var pt = bez(A0, A1, A2, tt);
+        P(pt[0], pt[1] - 26, 0.72, 0.5, 1.0, 0.65);
+        if (i === 0 || i === 14) P(pt[0], pt[1] - 32, 0.72, 0.5, 1.0, 0.65);
+      }
+      var mid = bez(A0, A1, A2, (sA + sB) / 2);
+      spreadPos = [mid[0] + VP.R.x, mid[1] - 52 + VP.R.y];
+    }
+    flushPrims(gl.LINES, vpL);
+
+    // 太阳（刚落下，半沉暮辉）
+    PT(sunPt[0], sunPt[1], 1.0, 0.45, 0.18, 0.85, 30);
+    PT(sunPt[0], sunPt[1], 1.0, 0.85, 0.55, 0.9, 9);
+    // 黄昏行星（大而亮的发光点）+ 连珠串（紫色光链串起可见行星）
+    var skyItems = [];
+    var chainPts = [];
+    a.eve.forEach(function (v) {
+      var inf = INFO[v.k];
+      var s = clamp(v.el / 180, 0, 1);
+      var pt = bez(A0, A1, A2, s);
+      chainPts.push(pt);
+      PT(pt[0], pt[1], inf.col[0], inf.col[1], inf.col[2], 1.0, inf.size * 1.9);
+      PT(pt[0], pt[1], inf.col[0], inf.col[1], inf.col[2], 0.55, inf.size * 4.6);
+      PT(pt[0], pt[1], 0.85, 0.92, 1.0, 0.9, inf.size * 0.7);   // 白芯
+      skyItems.push({ el: skyLbl[v.k], x: pt[0] + VP.R.x, y: pt[1] + VP.R.y - 14, show: showLbl,
+                      html: inf.name + ' <small>' + Math.round(v.el) + '°' + (inf.scope ? ' · ' + inf.scope : '') + '</small>' });
+    });
+    // 连珠串：沿弧线把可见行星连起来（紫色辉光链，与左视图同语言）
+    for (i = 1; i < chainPts.length; i++) {
+      var cA = chainPts[i - 1], cB = chainPts[i];
+      var seg = Math.max(6, Math.round(Math.hypot(cB[0] - cA[0], cB[1] - cA[1]) / 9));
+      for (var k2 = 0; k2 < seg; k2++) {
+        var t0 = k2 / seg, t1 = (k2 + 1) / seg;
+        var s0 = [cA[0] + (cB[0] - cA[0]) * t0, cA[1] + (cB[1] - cA[1]) * t0];
+        var s1 = [cA[0] + (cB[0] - cA[0]) * t1, cA[1] + (cB[1] - cA[1]) * t1];
+        [[0, 0, 0.75], [0, 1, 0.16], [0, -1, 0.16], [1, 0, 0.16], [-1, 0, 0.16]].forEach(function (o) {
+          P(s0[0] + o[0], s0[1] + o[1], 0.80, 0.62, 1.0, o[2]);
+          P(s1[0] + o[0], s1[1] + o[1], 0.80, 0.62, 1.0, o[2]);
+        });
+      }
+    }
+    flushPrims(gl.LINES, vpL);        // 连珠串（天空视角的紫色光链）
+    a.mor.forEach(function (v) {
+      var inf = INFO[v.k];
+      var s = clamp(v.el / 150, 0, 1) * 0.9;
+      var pt = bez(B0, B1, B2, s);
+      PT(pt[0], pt[1], inf.col[0], inf.col[1], inf.col[2], 0.45, inf.size * 0.9);
+      skyItems.push({ el: skyLbl[v.k], x: pt[0] + VP.R.x, y: pt[1] + VP.R.y + 4, show: showLbl,
+                      html: inf.name + ' <small>晨 · ' + Math.round(v.el) + '°</small>' });
+    });
+    var seen = {};
+    a.eve.concat(a.mor).forEach(function (v) { seen[v.k] = 1; });
+    ORDER.forEach(function (k) {                              // 不可见的隐藏
+      if (k !== 'earth' && !seen[k]) setLbl(skyLbl[k], 0, 0, '', false);
+    });
+    flushPts(vpL);
+
+    skyItems.push({ el: skyTitleLbl, x: vp.x + vp.w * 0.5, y: 14, show: true,
+                    html: '当晚黄昏的天空：面朝日落方向（左西右东），行星沿黄道从日落后向上排开' });
+    skyItems.push({ el: sunSkyLbl, x: sunPt[0] + VP.R.x, y: sunPt[1] + VP.R.y + 16, show: true, html: '日落点（角距原点）' });
+    var ept = bez(A0, A1, A2, 0.52);
+    skyItems.push({ el: eclLbl, x: ept[0] + VP.R.x, y: ept[1] + VP.R.y + 16, show: true, html: '黄 道' });
+    var dpt = bez(B0, B1, B2, 0.42);
+    skyItems.push({ el: dawnLbl, x: dpt[0] + VP.R.x, y: dpt[1] + VP.R.y + 18, show: a.mor.length > 0,
+                    html: '地平线下：凌晨才升的晨星' });
+    skyItems.push({ el: westLbl, x: 26 + VP.R.x, y: hor + VP.R.y - 8, show: true, html: '西（日落处）' });
+    skyItems.push({ el: eastLbl, x: W2 - 26 + VP.R.x, y: hor + VP.R.y - 8, show: true, html: '东' });
+    if (spreadPos) skyItems.push({ el: spreadLbl, x: spreadPos[0], y: spreadPos[1], show: true, html: '黄昏张角 ' + Math.round(a.spread) + '°' });
+    else setLbl(spreadLbl, 0, 0, '', false);
+    declutter(skyItems);
+  }
+
+  // ================= 四十年连珠日历（2D Canvas） =================
+  var tlCv = document.getElementById('tlCv');
+  var tlCtx = tlCv.getContext('2d');
+  var TL_STEP = 3, TL = null;      // {t0, n, counts[], maxCount}
+  (function buildTimeline() {
+    var n = Math.floor((T1_MS - T0_MS) / 86400000 / TL_STEP);
+    var counts = new Uint8Array(n);
+    for (var i = 0; i < n; i++) {
+      var ms = T0_MS + i * TL_STEP * 86400000;
+      counts[i] = computeAstro(ms).eve.length;
+    }
+    var mx = 0;
+    for (i = 0; i < n; i++) if (counts[i] > mx) mx = counts[i];
+    TL = { n: n, counts: counts, maxCount: mx };
+  })();
+
+  function drawTimeline() {
+    var w = tlCv.clientWidth, h = tlCv.clientHeight;
+    var d = Math.min(window.devicePixelRatio || 1, 2);
+    if (tlCv.width !== w * d || tlCv.height !== h * d) { tlCv.width = w * d; tlCv.height = h * d; }
+    var g = tlCtx;
+    g.setTransform(d, 0, 0, d, 0, 0);
+    g.clearRect(0, 0, w, h);
+    var x0 = 24, x1 = w - 8, bh = h - 12;
+    function xOf(ms) { return x0 + (ms - T0_MS) / (T1_MS - T0_MS) * (x1 - x0); }
+    // 年份刻度
+    g.font = '9px ui-monospace, Menlo, monospace';
+    g.fillStyle = 'rgba(116,136,173,0.9)';
+    g.strokeStyle = 'rgba(116,136,173,0.25)';
+    for (var yr = 2010; yr <= 2040; yr += 10) {
+      var x = xOf(Date.UTC(yr, 0, 1));
+      g.beginPath(); g.moveTo(x, 10); g.lineTo(x, h - 2); g.stroke();
+      g.fillText(String(yr), x - 12, 9);
+    }
+    // 可见数柱状
+    for (var i = 0; i < TL.n; i++) {
+      var c = TL.counts[i];
+      if (c < 3) continue;
+      var cx0 = xOf(T0_MS + i * TL_STEP * 86400000);
+      var cw = Math.max(1.2, (x1 - x0) / TL.n + 0.5);
+      var hh = (c / 7) * bh;
+      g.fillStyle = c >= 6 ? 'rgba(196,150,255,0.95)' : c >= 5 ? 'rgba(150,150,255,0.75)' : 'rgba(110,140,200,0.5)';
+      g.fillRect(cx0, h - 2 - hh, cw, hh);
+    }
+    // 事件旗标（交错两行避免文字重叠）
+    EVENTS.forEach(function (ev, idx) {
+      var x = xOf(ev.ms), ly = idx % 2 ? 30 : 19;
+      g.strokeStyle = 'rgba(255,210,138,0.8)';
+      g.setLineDash([3, 3]);
+      g.beginPath(); g.moveTo(x, ly - 7); g.lineTo(x, h - 2); g.stroke();
+      g.setLineDash([]);
+      g.fillStyle = 'rgba(255,210,138,0.95)';
+      g.fillText(ev.tag, x + 3, ly);
+    });
+    // 当前日期指针
+    var xc = xOf(sim.ms);
+    g.strokeStyle = '#fff';
+    g.lineWidth = 1.5;
+    g.beginPath(); g.moveTo(xc, 4); g.lineTo(xc, h); g.stroke();
+    g.lineWidth = 1;
+  }
+  (function bindTimeline() {
+    var dragging = false;
+    function seek(e) {
+      var rect = tlCv.getBoundingClientRect();
+      var f = clamp((e.clientX - rect.left - 24) / (rect.width - 32), 0, 1);
+      sim.ms = T0_MS + f * (T1_MS - T0_MS);
+    }
+    tlCv.addEventListener('pointerdown', function (e) { dragging = true; tlCv.setPointerCapture(e.pointerId); seek(e); });
+    tlCv.addEventListener('pointermove', function (e) { if (dragging) seek(e); });
+    tlCv.addEventListener('pointerup', function () { dragging = false; });
+  })();
+
+  // ---- 视图模式切换（俯视 2D / 三维 3D） ----
+  function setViewMode(m) {
+    ORR_MODE = m;
+    document.getElementById('segTop').classList.toggle('on', m === 'top');
+    document.getElementById('seg3d').classList.toggle('on', m === '3d');
+    document.getElementById('hint').textContent = m === '3d'
+      ? '拖动旋转三维视角 · 滚轮/双指缩放 · 双击复位 · 点击时间条或拖动日期 · 空格播放'
+      : '点击时间条或拖动日期 · 滚轮/双指缩放左侧星图 · 双击复位 · 空格播放';
+  }
+  document.getElementById('segTop').addEventListener('click', function () { setViewMode('top'); });
+  document.getElementById('seg3d').addEventListener('click', function () { setViewMode('3d'); });
+  setViewMode(ORR_MODE);
+
+  // ---- 手势：2D 缩放星图 / 3D 旋转+缩放相机；双击复位 ----
+  function setZoom(z) { zoom = clamp(z, 0.6, 4); }
+  canvas.addEventListener('wheel', function (e) {
+    e.preventDefault();                        // 拦下浏览器页面缩放
+    if (ORR_MODE === '3d') cam3.dist = clamp(cam3.dist * Math.exp(e.deltaY * 0.0014), 0.5, 9);
+    else setZoom(zoom * Math.exp(-e.deltaY * 0.0014));
+  }, { passive: false });
+  canvas.addEventListener('dblclick', function () { zoom = 1; cam3.yaw = 0.7; cam3.pitch = 0.9; cam3.dist = 3.0; });
+  var pointers = new Map(), pinchDist = 0, dragPtr = null;
+  canvas.addEventListener('pointerdown', function (e) {
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 2) {
+      var pp = Array.from(pointers.values());
+      pinchDist = Math.hypot(pp[0].x - pp[1].x, pp[0].y - pp[1].y);
+    } else if (pointers.size === 1 && ORR_MODE === '3d' && e.clientX < VP.L.w) {
+      dragPtr = e.pointerId;                    // 左半区拖动 = 旋转三维视角
+      autoRot = false;                          // 用户接管后停止自转
+    }
+  });
+  canvas.addEventListener('pointermove', function (e) {
+    if (!pointers.has(e.pointerId)) return;
+    var prev = pointers.get(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 2) {
+      var pp = Array.from(pointers.values());
+      var d = Math.hypot(pp[0].x - pp[1].x, pp[0].y - pp[1].y);
+      if (pinchDist > 0) {
+        if (ORR_MODE === '3d') cam3.dist = clamp(cam3.dist * pinchDist / d, 0.5, 9);
+        else setZoom(zoom * d / pinchDist);
+      }
+      pinchDist = d;
+    } else if (e.pointerId === dragPtr) {
+      cam3.yaw -= (e.clientX - prev.x) * 0.006;
+      cam3.pitch = clamp(cam3.pitch + (e.clientY - prev.y) * 0.006, 0.04, 1.52);
+    }
+  });
+  function endPointer(e) {
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2) pinchDist = 0;
+    if (e.pointerId === dragPtr) dragPtr = null;
+  }
+  canvas.addEventListener('pointerup', endPointer);
+  canvas.addEventListener('pointercancel', endPointer);
+
+  // ================= UI =================
+  var playBtn = document.getElementById('playBtn');
+  function refreshPlay() {
+    playBtn.textContent = sim.playing ? '暂停' : '播放';
+    playBtn.classList.toggle('lit', sim.playing);
+  }
+  playBtn.addEventListener('click', function () { sim.playing = !sim.playing; refreshPlay(); });
+  window.addEventListener('keydown', function (e) {
+    if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); sim.playing = !sim.playing; refreshPlay(); }
+  });
+  function jumpTo(ms) { sim.ms = clamp(ms, T0_MS, T1_MS); }
+  document.getElementById('ev1Btn').addEventListener('click', function () { jumpTo(EVENTS[0].ms); });
+  document.getElementById('ev2Btn').addEventListener('click', function () { jumpTo(EVENTS[1].ms); });
+  document.getElementById('ev3Btn').addEventListener('click', function () { jumpTo(EVENTS[2].ms); });
+  document.getElementById('nowBtn').addEventListener('click', function () { jumpTo(Date.now()); });
+  document.getElementById('collapseBtn').addEventListener('click', function () {
+    var p = document.getElementById('panel');
+    p.classList.toggle('collapsed');
+    this.textContent = p.classList.contains('collapsed') ? '+' : '–';
+  });
+
+  var dateEl = document.getElementById('date');
+  dateEl.min = T0_MS; dateEl.max = T1_MS; dateEl.step = 86400000; dateEl.value = sim.ms;
+  dateEl.addEventListener('input', function () { sim.ms = parseFloat(dateEl.value); });
+  var speedEl = document.getElementById('speed');
+  function speedOf(v) { return 0.02 * Math.pow(60 / 0.02, v / 100); }   // 0.02 ~ 60 天/秒（指数）
+  function fmtSpeed(s) { return (s < 1 ? s.toFixed(2) : s < 10 ? s.toFixed(1) : Math.round(s)) + ' 天/秒'; }
+  function applySpeed() {
+    sim.speed = speedOf(parseFloat(speedEl.value));
+    document.getElementById('speedV').textContent = fmtSpeed(sim.speed);
+  }
+  speedEl.addEventListener('input', applySpeed);
+  applySpeed();
+  refreshPlay();
+
+  function fmtDate(ms) {
+    var d = new Date(ms);
+    return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
+  }
+  var CN = ['零', '一', '二', '三', '四', '五', '六', '七'];
+  var dDate = document.getElementById('dDate'), dEve = document.getElementById('dEve');
+  var dMor = document.getElementById('dMor'), dSpread = document.getElementById('dSpread'), dLvl = document.getElementById('dLvl');
+
+  // ================= 概念卡 =================
+  var STAGES = [
+    ['黄道 · 行星共面', '太阳系八大行星的轨道几乎在同一个平面（<em>黄道面</em>）上——水星倾角最大也只有 7°。看左侧俯视图：所有轨道像一张密纹唱片。从地球看，行星永远走在天空同一条带（黄道）上——"连成一线"的地基在此：它们本来就永远共线于黄道，只是平时散布各处。'],
+    ['巡游 · 同侧扎堆', '各行星公转周期互不相同（水星 88 天 → 海王星 165 年），偶尔齐齐运行到太阳同一侧、聚在小张角内，日落后沿黄道<em>一字排开</em>——"行星巡游"。左侧扇区是地球的<em>黄昏视域</em>（反日方向 ±82°）：进入紫色扇区的行星当晚可见；右侧弧线即当晚天空。'],
+    ['连珠 · 稀有而无害', '严格按"黄昏同时可见"口径，<em>四十年里真正的七星只有约三遇</em>：2022 年末、2025-02-28（点按钮看满弧七星）、2036 年春——看顶部日历的柱峰多稀疏。2026-02-28 的"七星之夜"是整夜口径：火星刚过合日、凌晨才升起。连珠只是<em>视觉现象</em>：行星引潮力与距离立方成反比，七星合计的潮汐效应不及月球的百万分之一，与吉凶无关；换个参照系（从太阳看），"直线"根本不存在。']
+  ];
+  var stageDot = document.getElementById('stageDot');
+  var stageTitle = document.getElementById('stageTitle');
+  var stageBody = document.getElementById('stageBody');
+  var lastStage = 0;
+  function updateStage(nEve) {
+    var s = nEve >= 5 ? 3 : nEve >= 3 ? 2 : 1;
+    if (s !== lastStage) {
+      lastStage = s;
+      stageDot.textContent = '概念 ' + s + ' / 3';
+      stageTitle.textContent = STAGES[s - 1][0];
+      stageBody.innerHTML = STAGES[s - 1][1];
+    }
+  }
+  stageTitle.textContent = STAGES[0][0];
+  stageBody.innerHTML = STAGES[0][1];
+
+  // ================= 主循环 =================
+  var stats = document.getElementById('stats');
+  var frames = 0, lastStat = performance.now(), lastT = performance.now(), lastRT = 0;
+
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = Math.max(2, Math.round(canvas.clientWidth * dpr));
+    var h = Math.max(2, Math.round(canvas.clientHeight * dpr));
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w; canvas.height = h;
+    }
+    W = canvas.clientWidth; H = canvas.clientHeight;
+    var wl = Math.round(W * (W > 880 ? MID_SPLIT : 0.5));
+    VP.L = { x: 0, y: 0, w: wl, h: H };
+    VP.R = { x: wl, y: 0, w: W - wl, h: H };
+  }
+  window.addEventListener('resize', resize);
+
+  function render(t) {
+    var rdt = clamp((t - lastRT) / 1000, 0, 0.05);
+    lastRT = t;
+    if (ORR_MODE === '3d' && autoRot) cam3.yaw += rdt * 0.06;   // 缓慢自转强调立体
+    var dt = Math.min((t - lastT) / 1000, 0.1);
+    lastT = t;
+    if (sim.playing) {
+      sim.ms += sim.speed * dt * 86400000;
+      if (sim.ms > T1_MS) sim.ms = T0_MS;
+    }
+    if (sim.playing && document.activeElement !== dateEl) {
+      dateEl.value = Math.round(sim.ms / 86400000) * 86400000;
+    }
+
+    astro = computeAstro(sim.ms);
+
+    resize();
+    gl.clearColor(0.008, 0.012, 0.024, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    // 左：太阳系俯视（或三维）
+    drawBg(VP.L, 0, null, 0, t / 1000);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    if (ORR_MODE === '3d') drawOrrery3D(astro, t / 1000);
+    else drawOrrery(astro, t / 1000);
+    // 右：黄昏天空（内部含背景 + 加法发光点）
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+    drawSky(astro, t / 1000);
+    gl.disable(gl.BLEND);
+
+    // 数据卡 & 日历 & 概念卡
+    var nE = astro.eve.length, nM = astro.mor.length;
+    dDate.textContent = fmtDate(sim.ms);
+    document.getElementById('dateV').textContent = fmtDate(sim.ms);
+    dEve.textContent = CN[nE] + ' / 7 颗' + (astro.eve.length ? '（' + astro.eve.map(function (v) { return INFO[v.k].name[0]; }).join('·') + '）' : '');
+    dMor.textContent = CN[nM] + ' / 7 颗';
+    dSpread.textContent = nE >= 2 ? Math.round(astro.spread) + '°' : '–';
+    dLvl.textContent = nE >= 6 ? CN[nE] + '星连珠！' : nE === 5 ? '五星连珠' : nE === 4 ? '四星巡游' : nE === 3 ? '三星聚' : '常态散布';
+    var PHN = ['朔', '娥眉月', '上弦', '盈凸', '望', '亏凸', '下弦', '残月'];
+    var ph = moonPhase(sim.ms), md = moonEph(sim.ms).dist;
+    var pi2 = Math.floor(((ph + 22.5) % 360) / 45);
+    document.getElementById('dMoon').textContent = PHN[pi2] + ' · ' + (md / 10000).toFixed(1) + '万km';
+    drawTimeline();
+    updateStage(nE);
+
+    frames++;
+    if (t - lastStat > 500) {
+      stats.textContent = Math.round(frames * 1000 / (t - lastStat)) + ' FPS · ' + (ORR_MODE === '3d' ? '三维 · 距离 ' + cam3.dist.toFixed(1) : '星图 ' + zoom.toFixed(1) + '×') + ' · ' + canvas.width + '×' + canvas.height;
+      frames = 0; lastStat = t;
+    }
+  }
+
+  // 调试/测试钩子
+  window.__plStats = function () {
+    var now = Date.now();
+    return { date: fmtDate(sim.ms), eve: astro.eve.map(function (v) { return v.k; }),
+             mor: astro.mor.map(function (v) { return v.k; }), spread: astro.spread, maxTL: TL.maxCount,
+             moonPhase: Math.round(moonPhase(sim.ms)), moonDist: Math.round(moonEph(sim.ms).dist) };
+  };
+  window.__plSeek = function (ms) { sim.ms = ms; render(performance.now()); };
+
+  resize();
+  try {
+    render(performance.now());
+  } catch (e) { showError('渲染出错：\n' + (e && e.stack || e)); return; }
+  function loop(t) {
+    try { render(t); } catch (e) { showError('渲染出错：\n' + (e && e.stack || e)); return; }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

@@ -72,5 +72,14 @@ const ro5 = await page.$eval('#readout', el => el.textContent)
 assert(/入射/.test(ro5) && /膜片吸收/.test(ro5), 'demo5 结算读数: ' + ro5.slice(0, 80))
 await shot('f5-pulse-end')
 
+// ---- demo6: physics/planets（七星连珠，移植页） ----
+await page.goto(`${BASE}/demos/physics/planets/`)
+await page.waitForTimeout(2500)
+const t6 = await page.title()
+assert(/七星连珠/.test(t6), 'demo6 标题加载: ' + t6)
+const cv6 = await page.$eval('canvas', c => c.width > 0 && c.height > 0)
+assert(cv6, 'demo6 画布已渲染')
+await shot('f6-planets')
+
 console.log(errors.length ? 'CONSOLE ERRORS:\n' + errors.join('\n') : 'console clean')
 await browser.close()

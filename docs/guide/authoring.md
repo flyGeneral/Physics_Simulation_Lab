@@ -16,7 +16,7 @@ docs/
 └── public/demos/            # 全部交互 demo（静态托管，不参与构建）
     ├── camera/<demo>/       #   按栏目分组
     ├── common/<demo>/       #   跨器件共用 demo
-    └── physics/<demo>/      #   AI_Physics 导入落点
+    └── physics/<demo>/      #   通用物理演示
 ```
 
 ## 新增一个文档专题
@@ -54,7 +54,7 @@ docs/
 
 ## 新增一个交互 demo
 
-demo 是**一个目录一个 `index.html`**，铁律继承自 AI_Physics 项目：
+demo 是**一个目录一个 `index.html`**，铁律：
 
 - **自包含**：全部 JS/CSS 内联，零 CDN、零外部资源、零构建；
 - **可移植**：双击 `file://` 直接打开也能跑（因此不要引用站内共享脚本，工具函数宁可每个 demo 复制一份）；
@@ -70,15 +70,15 @@ demo 是**一个目录一个 `index.html`**，铁律继承自 AI_Physics 项目�
 <DemoEmbed src="/demos/<栏目>/<demo>/" title="演示标题" :aspect="`4 / 3`" />
 ```
 
-## 导入 AI_Physics 动画 {#import-ai-physics}
+## 移植一个现成的 HTML 动画
 
-AI_Physics 的每个主题是自包含 `index.html`（20K~68K，vanilla JS + WebGL/Canvas），导入三步：
+外部或既有动画只要是自包含 `index.html`（无外部依赖），即可并入本站，三步：
 
-1. **拷贝**：把主题目录（如 `blackhole/`）整个拷到 `docs/public/demos/physics/blackhole/`（只拷 `index.html` 即可，其 README/start.sh 不需要）；
-2. **建文档**：`docs/physics/blackhole.md` 按文档模板写原理讲解；
-3. **嵌入**：文档里 `<DemoEmbed src="/demos/physics/blackhole/" title="黑洞：光线弯曲与吸积盘" />`，并在 sidebar 注册。
+1. **拷贝**：放到 `docs/public/demos/<栏目>/<主题名>/index.html`；
+2. **建文档**：在对应栏目目录按文档模板写原理讲解（物理专题可省去「测试方法/选型速查」小节）；
+3. **嵌入**：文档里 `<DemoEmbed src="/demos/<栏目>/<主题名>/" title="标题" />`，并在 `config.mts` 的 sidebar 注册。
 
-AI_Physics 页面是零依赖自包含 HTML，与 iframe 嵌入天然兼容；若其页面自带全屏/说明，嵌入时可加 `:aspect="`16 / 9`"` 等适配参数。
+若页面自带说明/交互面板，嵌入时可加 `:aspect="`16 / 9`"` 与 `minHeight` 适配布局。参考范例：`demos/physics/planets/` 与「七星连珠」专题页。
 
 ## 新增一个栏目
 
