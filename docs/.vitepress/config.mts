@@ -54,6 +54,10 @@ export default defineConfig({
           text: '物理现象',
           items: [{ text: '黑洞模拟', link: '/physics/blackhole' }],
         },
+        {
+          text: '工程智慧',
+          items: [{ text: '都江堰分水模型', link: '/physics/dujiangyan' }],
+        },
         { text: '数学几何', items: [] },
       ],
       '/sensing/': [
