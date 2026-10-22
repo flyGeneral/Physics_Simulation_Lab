@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#000000">
+<title>超级月亮 · 三维地月</title>
+<link rel="icon" href="data:,">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; color: #dbe4f5; }
+  #gl { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; touch-action: none; cursor: grab; }
+  #gl.dragging { cursor: grabbing; }
+
+  .card { position: fixed; background: rgba(8, 11, 20, 0.58); border: 1px solid rgba(140, 165, 220, 0.16); border-radius: 14px; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 6px 30px rgba(0,0,0,0.45); }
+  #title { top: 16px; left: 16px; padding: 10px 16px; user-select: none; }
+  #title h1 { font-size: 15px; font-weight: 600; letter-spacing: 1px; color: #f2f6ff; }
+  #title p { font-size: 11px; color: #8fa2c7; margin-top: 2px; }
+
+  #data { top: 16px; right: 16px; padding: 10px 14px; font: 11px/1.8 ui-monospace, Menlo, monospace; color: #9db1d8; user-select: none; min-width: 226px; }
+  #data b { color: #ffd88a; font-weight: 600; }
+  #data .row2 { display: flex; justify-content: space-between; gap: 14px; }
+  #data .hl { color: #ffcf6a; }
+
+  #inst { top: 208px; right: 16px; padding: 9px 11px 7px; user-select: none; }
+  #inst .row3 { display: flex; gap: 10px; align-items: center; }
+  #inst p { font: 9.5px ui-monospace, Menlo, monospace; color: #7488ad; text-align: center; margin-top: 4px; }
+
+  #tl { bottom: 92px; left: 284px; right: 16px; padding: 7px 12px 5px; user-select: none; }
+  #tl header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 3px; }
+  #tl header span { font-size: 10.5px; font-weight: 600; color: #c8d6f2; letter-spacing: 1px; }
+  #tl header em { font-style: normal; font-size: 9px; color: #7488ad; }
+  #tlCv { display: block; width: 100%; height: 54px; cursor: crosshair; }
+
+  #stats { bottom: 16px; right: 16px; padding: 7px 12px; font: 11px ui-monospace, Menlo, monospace; color: #9db1d8; user-select: none; }
+
+  #panel { bottom: 16px; left: 16px; width: 252px; padding: 12px 14px 14px; }
+  #panel header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  #panel header span { font-size: 12px; font-weight: 600; color: #c8d6f2; letter-spacing: 1px; }
+  #collapseBtn { background: none; border: 1px solid rgba(140,165,220,.25); color: #9db1d8; border-radius: 6px; width: 22px; height: 22px; cursor: pointer; font-size: 12px; line-height: 1; }
+  #panel .row { display: flex; align-items: center; justify-content: space-between; margin: 9px 0; gap: 8px; }
+  #panel label { font-size: 12px; color: #b7c6e6; white-space: nowrap; }
+  #panel input[type=range] { flex: 1; min-width: 0; accent-color: #ffd88a; height: 14px; cursor: pointer; }
+  #panel .val { font: 11px ui-monospace, Menlo, monospace; color: #ffe0a8; width: 74px; text-align: right; }
+  .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .btns button { flex: 1 1 30%; background: rgba(255,216,138,.12); border: 1px solid rgba(255,216,138,.4); color: #ffe6b8; border-radius: 8px; padding: 6px 2px; font-size: 11px; cursor: pointer; transition: background .15s; }
+  .btns button:hover { background: rgba(255,216,138,.26); }
+  .btns button.lit { background: rgba(255,216,138,.36); color: #fff6e0; }
+  #panel.collapsed .row, #panel.collapsed .btns { display: none; }
+  #panel .note { font-size: 10px; color: #6d7f9f; margin-top: 8px; line-height: 1.5; }
+
+  #stage { right: 16px; bottom: 176px; width: 340px; padding: 11px 14px 12px; }
+  #stage header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 5px; }
+  #stage .dot { font: 10px ui-monospace, Menlo, monospace; color: #ffe0a8; letter-spacing: 1px; }
+  #stage h2 { font-size: 13px; font-weight: 600; color: #ffedc9; letter-spacing: 1px; }
+  #stage p { font-size: 11.5px; color: #b9c6e2; line-height: 1.65; }
+  #stage p em { color: #ffedc9; font-style: normal; }
+
+  #badge { position: fixed; left: 50%; top: 18%; transform: translateX(-50%); display: none; padding: 12px 26px; border-radius: 14px; background: rgba(40, 30, 6, 0.72); border: 1.5px solid #ffd88a; color: #ffedb8; font-size: 17px; font-weight: 700; letter-spacing: 2px; pointer-events: none; user-select: none; box-shadow: 0 0 44px rgba(255, 216, 138, 0.45); text-align: center; }
+  #badge small { display: block; font-size: 11px; font-weight: 400; letter-spacing: 1px; color: #ffe9bd; margin-top: 3px; }
+
+  .lbl { position: fixed; font-size: 11px; font-weight: 600; color: #fff; background: rgba(7, 13, 26, 0.72); border: 1px solid #9db1d8; border-radius: 7px; padding: 2px 7px; letter-spacing: 0.5px; pointer-events: none; user-select: none; transform: translate(-50%, -160%); white-space: nowrap; }
+  .lbl small { font-weight: 400; font-size: 9px; color: #b9c9e8; }
+  .lbl.tag { background: none; border: none; color: #ffd88a; font-weight: 400; font-size: 10.5px; }
+
+  #hint { bottom: 16px; left: 284px; padding: 8px 13px; font-size: 11px; color: #93a6cc; user-select: none; pointer-events: none; }
+  #err { position: fixed; inset: 0; display: none; padding: 24px; background: #100505; color: #ff9a9a; font: 12px/1.6 ui-monospace, Menlo, monospace; white-space: pre-wrap; overflow: auto; z-index: 99; }
+  @media (max-width: 880px) { #panel { width: calc(100vw - 32px); } #hint, #data, #inst, #tl, #stage { display: none; } }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div class="card" id="title">
+  <h1>超级月亮 · 三维地月</h1>
+  <p>近点月 27.55 天 × 朔望月 29.53 天 · 413 天一撞</p>
+</div>
+
+<div class="card" id="data">
+  <div class="row2"><span>月地距离</span><b><span id="dDist">–</span> 万 km</b></div>
+  <div class="row2"><span>月相（黄经差）</span><b><span id="dPh">–</span>°</b></div>
+  <div class="row2"><span>视直径</span><b><span id="dSize">–</span>′</b></div>
+  <div class="row2"><span>亮度 vs 远地点</span><b><span id="dBri">–</span>%</b></div>
+  <div class="row2"><span>状态</span><b id="dSt" class="hl">–</b></div>
+</div>
+
+<div class="card" id="inst">
+  <div class="row3">
+    <canvas id="phCv" width="96" height="96"></canvas>
+    <canvas id="ckCv" width="128" height="96"></canvas>
+  </div>
+  <p>左：月相盘 · 右：双钟（金=满月 / 银=近地点）</p>
+</div>
+
+<div class="card" id="tl">
+  <header><span>413 天推演 · 月地距离曲线</span><em>金色段 = 满月 · 点击跳转</em></header>
+  <canvas id="tlCv"></canvas>
+</div>
+
+<div id="badge">超级月亮！<small>近地点满月 · 大 14% · 亮 30%</small></div>
+
+<div class="card" id="panel">
+  <header><span>追及实验台</span><button id="collapseBtn" title="收起/展开">–</button></header>
+  <div class="row"><label>推演天数</label><input type="range" id="days" min="0" max="413" step="0.5" value="0"><span class="val" id="daysV">0 天</span></div>
+  <div class="row"><label>播放速度</label><input type="range" id="speed" min="0" max="100" step="1" value="55"><span class="val" id="speedV">–</span></div>
+  <div class="btns">
+    <button id="playBtn">播放</button>
+    <button id="superBtn">跳到超级月亮</button>
+    <button id="microBtn">微月亮对比</button>
+    <button id="resetBtn">重置视角</button>
+  </div>
+  <div class="note">三维场景按真实比例：轨道椭圆 e=0.0549，透视"近大远小"就是那 14%。金色时刻 = 满月撞近地点（双针重合）；拖动旋转、滚轮缩放。月历为 Meeus 简化式。</div>
+</div>
+
+<div class="card" id="stage">
+  <header><span class="dot" id="stageDot">概念 1 / 4</span><h2 id="stageTitle">–</h2></header>
+  <p id="stageBody">–</p>
+</div>
+
+<div class="card" id="hint">拖动旋转三维视角 · 滚轮/双指缩放 · 空格播放</div>
+<div class="card" id="stats">-- FPS</div>
+<div id="err"></div>
+
+<!-- ======================= 3D 点 / 线 / 背景 ======================= -->
+<script id="vs3-pt" type="x-shader/x-vertex">
+attribute vec3 aPos;
+attribute vec4 aColor;
+attribute float aSize;
+uniform mat4 uMVP;
+uniform float uDpr;
+varying vec4 vColor;
+void main(){
+  vec4 p = uMVP * vec4(aPos, 1.0);
+  gl_Position = p;
+  gl_PointSize = clamp(aSize * uDpr / max(p.w, 0.25), 2.0, 64.0 * uDpr);
+  vColor = aColor;
+}
+</script>
+<script id="fs-pt" type="x-shader/x-fragment">
+precision mediump float;
+varying vec4 vColor;
+void main(){
+  vec2 d = gl_PointCoord - 0.5;
+  float fall = exp(-dot(d, d) * 11.0) - 0.045;
+  if (fall <= 0.0) discard;
+  gl_FragColor = vec4(vColor.rgb * fall * vColor.a, 1.0);
+}
+</script>
+<script id="vs3-pr" type="x-shader/x-vertex">
+attribute vec3 aPos;
+attribute vec4 aColor;
+uniform mat4 uMVP;
+varying vec4 vColor;
+void main(){
+  gl_Position = uMVP * vec4(aPos, 1.0);
+  vColor = aColor;
+}
+</script>
+<script id="fs-pr" type="x-shader/x-fragment">
+precision mediump float;
+varying vec4 vColor;
+void main(){ gl_FragColor = vColor; }
+</script>
+<script id="vs-full" type="x-shader/x-vertex">
+attribute vec2 aPos;
+void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }
+</script>
+<script id="fs-bg" type="x-shader/x-fragment">
+precision highp float;
+uniform vec2 uRes;
+uniform float uT;
+float hash(vec2 q){ return fract(sin(dot(q, vec2(127.1, 311.7))) * 43758.5453); }
+void main(){
+  vec2 uv = gl_FragCoord.xy / uRes;
+  vec3 col = mix(vec3(0.010, 0.014, 0.030), vec3(0.024, 0.030, 0.058), 1.0 - uv.y);
+  float st = hash(floor(gl_FragCoord.xy / 2.5));
+  col += vec3(0.9, 0.95, 1.0) * step(0.9968, st) * (0.30 + 0.40 * sin(uT * 1.6 + st * 90.0));
+  col *= 1.0 - 0.5 * dot(uv - 0.5, uv - 0.5) * 1.6;
+  gl_FragColor = vec4(col, 1.0);
+}
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var canvas = document.getElementById('gl');
+  var errBox = document.getElementById('err');
+  var gl = canvas.getContext('webgl', { antialias: true, alpha: false })
+        || canvas.getContext('experimental-webgl', { antialias: true, alpha: false });
+  if (!gl) { showError('当前浏览器不支持 WebGL，无法运行。'); return; }
+  function showError(m) { errBox.style.display = 'block'; errBox.textContent = m; }
+  function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+  function norm360(d) { d %= 360; return d < 0 ? d + 360 : d; }
+  var D2R = Math.PI / 180;
+
+  // ================= 月历（Meeus 简化式） =================
+  var J2000 = Date.UTC(2000, 0, 1, 12, 0, 0);
+  function centuries(ms) { return (ms - J2000) / 86400000 / 36525; }
+  var EL_E = [1.00000261, 0.00000562, 0.01671123, -0.00004392, 0.00005, -0.01294668,
+              100.46457166, 35999.37244981, 102.93768193, 0.32327364, 0.0, 0.0];
+  function sunLon(T) {
+    var e = EL_E, ec = e[2] + e[3] * T, L = (e[6] + e[7] * T) * D2R;
+    var M = L - (e[8] + e[9] * T) * D2R;
+    var E = M;
+    for (var k = 0; k < 6; k++) E -= (E - ec * Math.sin(E) - M) / (1 - ec * Math.cos(E));
+    var v = Math.atan2(Math.sqrt(1 - ec * ec) * Math.sin(E), Math.cos(E) - ec);
+    return norm360(v / D2R + (e[8] + e[9] * T) + 180);
+  }
+  function moonEph(ms) {
+    var T = centuries(ms), r = D2R;
+    var Lp = 218.3164477 + 481267.88123421 * T;
+    var D  = 297.8501921 + 445267.1114034 * T;
+    var M  = 357.5291092 + 35999.0502909 * T;
+    var Mp = 134.9633964 + 477198.8675055 * T;
+    var F  = 93.2720950 + 483202.0175233 * T;
+    var lam = Lp + 6.288774 * Math.sin(Mp * r) + 1.274027 * Math.sin((2 * D - Mp) * r)
+      + 0.658314 * Math.sin(2 * D * r) + 0.213618 * Math.sin(2 * Mp * r)
+      - 0.185116 * Math.sin(M * r) - 0.114332 * Math.sin(2 * F * r)
+      + 0.058793 * Math.sin((2 * D - 2 * Mp) * r) + 0.057066 * Math.sin((2 * D - M - Mp) * r);
+    var dist = 385000.56 - 20905.355 * Math.cos(Mp * r) - 3699.111 * Math.cos((2 * D - Mp) * r)
+      - 2955.968 * Math.cos(2 * D * r) - 569.925 * Math.cos(2 * Mp * r)
+      + 246.158 * Math.cos((2 * D - 2 * Mp) * r) - 204.586 * Math.cos((M - Mp) * r);
+    return { lam: norm360(lam), dist: dist, anom: norm360(Mp), phase: norm360(lam - sunLon(T)) };
+  }
+
+  // ================= 状态 =================
+  var BASE = Date.UTC(2026, 11, 24, 1, 0, 0);   // 一次近地点满月
+  var sim = { days: 0, speed: 3, playing: false };
+  var cam = { yaw: 0.9, pitch: 0.34, dist: 2.9 };
+  var autoRot = true;
+  function curMs() { return BASE + sim.days * 86400000; }
+
+  // ================= WebGL =================
+  function compile(type, src) {
+    var sh = gl.createShader(type);
+    gl.shaderSource(sh, src); gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh));
+    return sh;
+  }
+  function makeProg(vsId, fsId) {
+    var prog = gl.createProgram();
+    gl.attachShader(prog, compile(gl.VERTEX_SHADER, document.getElementById(vsId).textContent));
+    gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, document.getElementById(fsId).textContent));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+    return prog;
+  }
+  var progP, progC, progB, UP = {}, UC = {}, UB = {}, AP = {}, AC = {};
+  try {
+    progP = makeProg('vs3-pt', 'fs-pt');
+    progC = makeProg('vs3-pr', 'fs-pr');
+    progB = makeProg('vs-full', 'fs-bg');
+  } catch (e) { showError('着色器编译失败：\n' + e.message); return; }
+  ['uMVP', 'uDpr'].forEach(function (n) { UP[n] = gl.getUniformLocation(progP, n); });
+  ['uMVP'].forEach(function (n) { UC[n] = gl.getUniformLocation(progC, n); });
+  ['uRes', 'uT'].forEach(function (n) { UB[n] = gl.getUniformLocation(progB, n); });
+  AP.aPos = gl.getAttribLocation(progP, 'aPos');
+  AP.aColor = gl.getAttribLocation(progP, 'aColor');
+  AP.aSize = gl.getAttribLocation(progP, 'aSize');
+  AC.aPos = gl.getAttribLocation(progC, 'aPos');
+  AC.aColor = gl.getAttribLocation(progC, 'aColor');
+  var aFull = gl.getAttribLocation(progB, 'aPos');
+
+  var bQuad = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, bQuad);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  var bPrim = gl.createBuffer(), bPts = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, bPrim);
+  gl.bufferData(gl.ARRAY_BUFFER, 200000, gl.DYNAMIC_DRAW);
+  gl.bindBuffer(gl.ARRAY_BUFFER, bPts);
+  gl.bufferData(gl.ARRAY_BUFFER, 60000, gl.DYNAMIC_DRAW);
+
+  function norm3(v) { var l = Math.hypot(v[0], v[1], v[2]); return [v[0] / l, v[1] / l, v[2] / l]; }
+  function cross3(a, b) {
+    return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  }
+  function mat4Mul(a, b) {
+    var o = new Float32Array(16);
+    for (var c = 0; c < 4; c++) for (var r = 0; r < 4; r++) {
+      o[c * 4 + r] = a[r] * b[c * 4] + a[4 + r] * b[c * 4 + 1] + a[8 + r] * b[c * 4 + 2] + a[12 + r] * b[c * 4 + 3];
+    }
+    return o;
+  }
+  function mat4Persp(fovY, aspect, near, far) {
+    var f = 1 / Math.tan(fovY / 2);
+    return new Float32Array([f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, (far + near) / (near - far), -1, 0, 0, 2 * far * near / (near - far), 0]);
+  }
+  function mat4LookAt(eye, at, up) {
+    var f = norm3([at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]]);
+    var s = norm3(cross3(f, up));
+    var u = cross3(s, f);
+    return new Float32Array([
+      s[0], u[0], -f[0], 0,
+      s[1], u[1], -f[1], 0,
+      s[2], u[2], -f[2], 0,
+      -(s[0] * eye[0] + s[1] * eye[1] + s[2] * eye[2]),
+      -(u[0] * eye[0] + u[1] * eye[1] + u[2] * eye[2]),
+      (f[0] * eye[0] + f[1] * eye[1] + f[2] * eye[2]), 1]);
+  }
+
+  var primArr = [], ptArr = [];
+  function P3(x, y, z, r, g, b, a) { primArr.push(x, y, z, r, g, b, a); }
+  function PT3(x, y, z, r, g, b, a, size) { ptArr.push(x, y, z, r, g, b, a, size); }
+  function flushPrims(mode, mvp) {
+    if (!primArr.length) return;
+    gl.useProgram(progC);
+    gl.uniformMatrix4fv(UC.uMVP, false, mvp);
+    gl.bindBuffer(gl.ARRAY_BUFFER, bPrim);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, new Float32Array(primArr));
+    gl.enableVertexAttribArray(AC.aPos);
+    gl.vertexAttribPointer(AC.aPos, 3, gl.FLOAT, false, 28, 0);
+    gl.enableVertexAttribArray(AC.aColor);
+    gl.vertexAttribPointer(AC.aColor, 4, gl.FLOAT, false, 28, 12);
+    gl.drawArrays(mode, 0, primArr.length / 7);
+    primArr.length = 0;
+  }
+  function flushPts(mvp, dpr) {
+    if (!ptArr.length) return;
+    gl.useProgram(progP);
+    gl.uniformMatrix4fv(UP.uMVP, false, mvp);
+    gl.uniform1f(UP.uDpr, dpr);
+    gl.bindBuffer(gl.ARRAY_BUFFER, bPts);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, new Float32Array(ptArr));
+    gl.enableVertexAttribArray(AP.aPos);
+    gl.vertexAttribPointer(AP.aPos, 3, gl.FLOAT, false, 32, 0);
+    gl.enableVertexAttribArray(AP.aColor);
+    gl.vertexAttribPointer(AP.aColor, 4, gl.FLOAT, false, 32, 12);
+    gl.enableVertexAttribArray(AP.aSize);
+    gl.vertexAttribPointer(AP.aSize, 1, gl.FLOAT, false, 32, 28);
+    gl.drawArrays(gl.POINTS, 0, ptArr.length / 8);
+    ptArr.length = 0;
+  }
+
+  // ================= 标签 =================
+  var lblLayer = document.createElement('div');
+  document.body.appendChild(lblLayer);
+  function makeLbl(cls) {
+    var d = document.createElement('div');
+    d.className = 'lbl' + (cls ? ' ' + cls : '');
+    lblLayer.appendChild(d);
+    return d;
+  }
+  var lblMoon = makeLbl(), lblEarth = makeLbl(), lblPeri = makeLbl('tag'), lblApo = makeLbl('tag'), lblSun = makeLbl('tag');
+  function setLbl(el, x, y, html) {
+    if (x === null) { el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    if (el.innerHTML !== html) el.innerHTML = html;
+  }
+
+  // ================= 三维场景 =================
+  var A_ORBIT = 385000.56 / 385000.56;          // 半长轴 = 1（世界单位）
+  var TILT = 5.145 * D2R;                        // 白道相对黄道的倾角（示意放置）
+  function moonPos(m) {                          // 世界坐标：近日点在 -X（朝阳反方向）
+    var nu = solveKepler(m.anom * D2R, 0.0549);
+    var r = m.dist / 385000.56;
+    var th = nu + Math.PI;                       // 近地点指向 -X
+    var x = Math.cos(th) * r, z = Math.sin(th) * r;
+    return [x, Math.sin(th) * r * Math.sin(TILT), z];
+  }
+  function solveKepler(M, e) {
+    var E = M;
+    for (var k = 0; k < 6; k++) E -= (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+    return Math.atan2(Math.sqrt(1 - e * e) * Math.sin(E), Math.cos(E) - e);
+  }
+
+  var W = 0, H = 0, dpr = 1;
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = Math.max(2, Math.round(canvas.clientWidth * dpr)), h = Math.max(2, Math.round(canvas.clientHeight * dpr));
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    W = canvas.clientWidth; H = canvas.clientHeight;
+  }
+  window.addEventListener('resize', resize);
+
+  function drawScene(m, tSec, isSuper, flash) {
+    resize();
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    // 背景
+    gl.disable(gl.BLEND);
+    gl.useProgram(progB);
+    gl.uniform2f(UB.uRes, canvas.width, canvas.height);
+    gl.uniform1f(UB.uT, tSec);
+    gl.enableVertexAttribArray(aFull);
+    gl.bindBuffer(gl.ARRAY_BUFFER, bQuad);
+    gl.vertexAttribPointer(aFull, 2, gl.FLOAT, false, 0, 0);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    var eye = [cam.dist * Math.cos(cam.pitch) * Math.sin(cam.yaw),
+               cam.dist * Math.sin(cam.pitch),
+               cam.dist * Math.cos(cam.pitch) * Math.cos(cam.yaw)];
+    var view = mat4LookAt(eye, [0, 0, 0], [0, 1, 0]);
+    var proj = mat4Persp(0.85, canvas.width / Math.max(canvas.height, 1), 0.05, 60);
+    var mvp = mat4Mul(proj, view);
+    function projLbl(w) {
+      var cx = mvp[0] * w[0] + mvp[4] * w[1] + mvp[8] * w[2] + mvp[12];
+      var cy = mvp[1] * w[0] + mvp[5] * w[1] + mvp[9] * w[2] + mvp[13];
+      var cw = mvp[3] * w[0] + mvp[7] * w[1] + mvp[11] * w[2] + mvp[15];
+      if (cw <= 0.01) return null;
+      return [ (cx / cw * 0.5 + 0.5) * W, (1 - (cy / cw * 0.5 + 0.5)) * H ];
+    }
+
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+    // 轨道椭圆（白道，倾角 5.145°）
+    for (var i = 0; i < 140; i++) {
+      var nu0 = i / 140 * 2 * Math.PI, nu1 = (i + 1) / 140 * 2 * Math.PI;
+      function orb(nu) {
+        var r = (1 - 0.0549 * 0.0549) / (1 + 0.0549 * Math.cos(nu));
+        var th = nu + Math.PI;
+        return [Math.cos(th) * r, Math.sin(th) * r * Math.sin(TILT), Math.sin(th) * r];
+      }
+      var p0 = orb(nu0), p1 = orb(nu1);
+      P3(p0[0], p0[1], p0[2], 0.55, 0.62, 0.80, 0.30);
+      P3(p1[0], p1[1], p1[2], 0.55, 0.62, 0.80, 0.30);
+    }
+    flushPrims(gl.LINES, mvp);
+    // 近地点 / 远地点刻度（沿地月连线画短线）
+    function tick(dirAng, col) {
+      for (var k2 = -1; k2 <= 1; k2++) {
+        P3(Math.cos(dirAng) * 1.10, k2 * 0.008, Math.sin(dirAng) * 1.10, col[0], col[1], col[2], 0.8);
+        P3(Math.cos(dirAng) * 1.17, k2 * 0.008, Math.sin(dirAng) * 1.17, col[0], col[1], col[2], 0.8);
+      }
+    }
+    tick(Math.PI, [1.0, 0.85, 0.5]);            // 近地点（-X，金色）
+    tick(0, [0.7, 0.78, 0.92]);                 // 远地点（+X，银色）
+    // 地月连线
+    var mp = moonPos(m);
+    P3(0, 0, 0, 0.6, 0.66, 0.85, 0.28);
+    P3(mp[0], mp[1], mp[2], 0.6, 0.66, 0.85, 0.28);
+    flushPrims(gl.LINES, mvp);
+    // 超级时刻：金色扩散脉冲环（轨道面内）
+    if (isSuper) {
+      for (var ring = 0; ring < 3; ring++) {
+        var ph = (tSec * 0.55 + ring / 3) % 1;
+        var rr = 0.08 + ph * 0.55;
+        var al = (1 - ph) * 0.55;
+        for (i = 0; i < 40; i++) {
+          var a0 = i / 40 * 2 * Math.PI, a1 = (i + 1) / 40 * 2 * Math.PI;
+          P3(mp[0] + Math.cos(a0) * rr, mp[1] + Math.sin(a0) * rr * 0.3, mp[2] + Math.sin(a0) * rr, 1.0, 0.85, 0.5, al);
+          P3(mp[0] + Math.cos(a1) * rr, mp[1] + Math.sin(a1) * rr * 0.3, mp[2] + Math.sin(a1) * rr, 1.0, 0.85, 0.5, al);
+        }
+      }
+      flushPrims(gl.LINES, mvp);
+    }
+    // 太阳方向（+X 远方）
+    flushPrims(gl.LINES, mvp);
+    PT3(5.2, 0.5, -1.6, 1.0, 0.82, 0.45, 0.4, 150);
+    PT3(5.2, 0.5, -1.6, 1.0, 0.98, 0.85, 0.9, 26);
+    for (i = 0; i < 5; i++) {
+      var zoff = -2.6 + i * 1.1;
+      P3(4.4, 0.5 + i * 0.12, zoff, 1.0, 0.85, 0.5, 0.22);
+      P3(2.2, 0.5 + i * 0.12, zoff, 1.0, 0.85, 0.5, 0.02);
+    }
+    flushPrims(gl.LINES, mvp);
+    // 地球（蓝芯 + 大气晕）
+    PT3(0, 0, 0, 0.30, 0.55, 1.0, 0.35, 130);
+    PT3(0, 0, 0, 0.55, 0.80, 1.0, 1.0, 30);
+    PT3(0, 0, 0, 0.9, 0.97, 1.0, 0.9, 9);
+    // 月球（本体 + 晕；超级时刻金色放大）
+    var mcol = isSuper ? [1.0, 0.9, 0.62] : [0.88, 0.90, 0.96];
+    PT3(mp[0], mp[1], mp[2], mcol[0], mcol[1], mcol[2], isSuper ? 0.75 : 0.4, isSuper ? 150 + 30 * flash : 74);
+    PT3(mp[0], mp[1], mp[2], 0.97, 0.97, 1.0, 1.0, isSuper ? 20 : 15);
+    flushPts(mvp, dpr);
+
+    // 标签
+    var lp = projLbl(mp);
+    setLbl(lblMoon, lp ? lp[0] : null, lp ? lp[1] - 14 : 0,
+           '月球 <small>' + Math.round(m.dist) + ' km' + (isSuper ? ' · 超级月亮！' : '') + '</small>');
+    setLbl(lblEarth, W * 0.5, H * 0.62, '地球');
+    var pp = projLbl([-1.13, 0, 0]);
+    setLbl(lblPeri, pp ? pp[0] : null, pp ? pp[1] + 16 : 0, '近地点 35.65万km');
+    var ap2 = projLbl([1.13, 0, 0]);
+    setLbl(lblApo, ap2 ? ap2[0] : null, ap2 ? ap2[1] + 16 : 0, '远地点 40.67万km');
+    var sp2 = projLbl([5.2, 0.5, -1.6]);
+    setLbl(lblSun, sp2 ? sp2[0] : null, sp2 ? sp2[1] : 0, '太阳（光照方向）');
+    gl.disable(gl.BLEND);
+  }
+
+  // ================= 悬浮插图（月相盘 + 双钟） =================
+  var phCv = document.getElementById('phCv'), phG = phCv.getContext('2d');
+  function drawPhase(m) {
+    var w = phCv.width, h = phCv.height, c = w / 2, R = w * 0.4;
+    phG.clearRect(0, 0, w, h);
+    // 暗底盘
+    phG.fillStyle = '#232428';
+    phG.beginPath(); phG.arc(c, c, R, 0, Math.PI * 2); phG.fill();
+    // 明亮部分（右盈左亏按相位 0→360）
+    var phi = m.phase * D2R;
+    var waxing = m.phase < 180;
+    phG.fillStyle = '#f2e9cf';
+    phG.beginPath();
+    if (waxing) {
+      phG.arc(c, c, R, -Math.PI / 2, Math.PI / 2, false);
+      phG.ellipse(c, c, Math.abs(Math.cos(phi)) * R, R, 0, Math.PI / 2, -Math.PI / 2, Math.cos(phi) > 0);
+    } else {
+      phG.arc(c, c, R, Math.PI / 2, -Math.PI / 2, false);
+      phG.ellipse(c, c, Math.abs(Math.cos(phi)) * R, R, 0, -Math.PI / 2, Math.PI / 2, Math.cos(phi) > 0);
+    }
+    phG.fill();
+    phG.strokeStyle = 'rgba(180,190,210,0.5)';
+    phG.beginPath(); phG.arc(c, c, R, 0, Math.PI * 2); phG.stroke();
+    phG.fillStyle = 'rgba(148,164,200,0.9)'; phG.font = '9px sans-serif'; phG.textAlign = 'center';
+    phG.fillText('月相 ' + Math.round(m.phase) + '°', c, h - 4);
+  }
+  var ckCv = document.getElementById('ckCv'), ckG = ckCv.getContext('2d');
+  function drawClock(m) {
+    var w = ckCv.width, h = ckCv.height, cx = w / 2, cy = h / 2 - 4, R = h * 0.36;
+    ckG.clearRect(0, 0, w, h);
+    ckG.strokeStyle = 'rgba(150,170,210,0.3)'; ckG.lineWidth = 1;
+    ckG.beginPath(); ckG.arc(cx, cy, R, 0, Math.PI * 2); ckG.stroke();
+    ckG.strokeStyle = 'rgba(255,216,138,0.3)';
+    ckG.beginPath(); ckG.arc(cx, cy, R * 0.6, 0, Math.PI * 2); ckG.stroke();
+    var pa = (m.phase - 180) * D2R, na = m.anom * D2R;
+    ckG.strokeStyle = '#ffd88a'; ckG.lineWidth = 2; ckG.lineCap = 'round';
+    ckG.beginPath(); ckG.moveTo(cx, cy);
+    ckG.lineTo(cx + Math.sin(pa) * R * 0.58, cy - Math.cos(pa) * R * 0.58); ckG.stroke();
+    ckG.strokeStyle = '#c9d6f0';
+    ckG.beginPath(); ckG.moveTo(cx, cy);
+    ckG.lineTo(cx + Math.sin(na) * R * 0.95, cy - Math.cos(na) * R * 0.95); ckG.stroke();
+    ckG.lineCap = 'butt'; ckG.lineWidth = 1;
+    ckG.fillStyle = 'rgba(148,164,200,0.9)'; ckG.font = '8.5px sans-serif'; ckG.textAlign = 'center';
+    ckG.fillText('金=满月 银=近地点', cx, h - 3);
+  }
+
+  // ================= 时间条（413 天距离曲线） =================
+  var tlCv = document.getElementById('tlCv'), tlG = tlCv.getContext('2d');
+  function drawTimeline() {
+    var w = tlCv.clientWidth, h = tlCv.clientHeight, d = Math.min(window.devicePixelRatio || 1, 2);
+    if (tlCv.width !== w * d || tlCv.height !== h * d) { tlCv.width = w * d; tlCv.height = h * d; }
+    var g = tlG;
+    g.setTransform(d, 0, 0, d, 0, 0);
+    g.clearRect(0, 0, w, h);
+    var ay = h * 0.82, ah = h * 0.62;
+    g.strokeStyle = 'rgba(150,170,210,0.25)';
+    g.beginPath(); g.moveTo(0, ay); g.lineTo(w, ay); g.stroke();
+    var prev = null, prevFull = false;
+    for (var i = 0; i <= 413; i++) {
+      var ms = BASE + (i - 206) * 86400000;
+      var m = moonEph(ms);
+      var isFull = Math.abs(((m.phase + 180) % 360) - 180) < 8;
+      var px = i / 413 * w;
+      var py = ay - (m.dist - 356500) / 50200 * ah;
+      if (prev) {
+        g.strokeStyle = (isFull && prevFull) ? 'rgba(255,216,138,0.95)' : 'rgba(150,170,210,0.35)';
+        g.lineWidth = isFull ? 2 : 1;
+        g.beginPath(); g.moveTo(prev[0], prev[1]); g.lineTo(px, py); g.stroke();
+      }
+      prev = [px, py]; prevFull = isFull;
+    }
+    g.lineWidth = 1;
+    var cx = (206 + sim.days) / 413 * w;
+    g.strokeStyle = '#fff'; g.lineWidth = 1.5;
+    g.beginPath(); g.moveTo(cx, 4); g.lineTo(cx, h); g.stroke(); g.lineWidth = 1;
+    g.fillStyle = 'rgba(116,136,173,0.9)'; g.font = '9px sans-serif';
+    g.textAlign = 'left'; g.fillText('← 206 天前', 4, 10);
+    g.textAlign = 'right'; g.fillText('206 天后 →', w - 4, 10);
+  }
+  (function bindTl() {
+    var dragging = false;
+    function seek(e) {
+      var r = tlCv.getBoundingClientRect();
+      sim.days = clamp((e.clientX - r.left) / r.width, 0, 1) * 413;
+    }
+    tlCv.addEventListener('pointerdown', function (e) { dragging = true; tlCv.setPointerCapture(e.pointerId); seek(e); });
+    tlCv.addEventListener('pointermove', function (e) { if (dragging) seek(e); });
+    tlCv.addEventListener('pointerup', function () { dragging = false; });
+  })();
+
+  // ================= 交互（拖转 / 缩放 / 播放） =================
+  var pointers = new Map(), pinchDist = 0, dragPtr = null;
+  canvas.addEventListener('pointerdown', function (e) {
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 2) {
+      var pp = Array.from(pointers.values());
+      pinchDist = Math.hypot(pp[0].x - pp[1].x, pp[0].y - pp[1].y);
+    } else if (pointers.size === 1) {
+      dragPtr = e.pointerId; autoRot = false;
+      canvas.classList.add('dragging');
+    }
+  });
+  canvas.addEventListener('pointermove', function (e) {
+    if (!pointers.has(e.pointerId)) return;
+    var prev = pointers.get(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 2) {
+      var pp = Array.from(pointers.values());
+      var dd = Math.hypot(pp[0].x - pp[1].x, pp[0].y - pp[1].y);
+      if (pinchDist > 0) cam.dist = clamp(cam.dist * pinchDist / dd, 1.2, 9);
+      pinchDist = dd;
+    } else if (e.pointerId === dragPtr) {
+      cam.yaw -= (e.clientX - prev.x) * 0.006;
+      cam.pitch = clamp(cam.pitch + (e.clientY - prev.y) * 0.006, 0.04, 1.5);
+    }
+  });
+  function endPtr(e) {
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2) pinchDist = 0;
+    if (e.pointerId === dragPtr) { dragPtr = null; canvas.classList.remove('dragging'); }
+  }
+  canvas.addEventListener('pointerup', endPtr);
+  canvas.addEventListener('pointercancel', endPtr);
+  canvas.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    cam.dist = clamp(cam.dist * Math.exp(e.deltaY * 0.0012), 1.2, 9);
+  }, { passive: false });
+  canvas.addEventListener('dblclick', function () {
+    cam.yaw = 0.9; cam.pitch = 0.34; cam.dist = 2.9; autoRot = true;
+  });
+
+  var playBtn = document.getElementById('playBtn');
+  function refreshPlay() { playBtn.textContent = sim.playing ? '暂停' : '播放'; playBtn.classList.toggle('lit', sim.playing); }
+  playBtn.addEventListener('click', function () { sim.playing = !sim.playing; refreshPlay(); });
+  window.addEventListener('keydown', function (e) {
+    if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); sim.playing = !sim.playing; refreshPlay(); }
+  });
+  document.getElementById('superBtn').addEventListener('click', function () { sim.days = 0; });
+  document.getElementById('microBtn').addEventListener('click', function () { sim.days = 206; });
+  document.getElementById('resetBtn').addEventListener('click', function () {
+    cam.yaw = 0.9; cam.pitch = 0.34; cam.dist = 2.9; autoRot = true;
+  });
+  document.getElementById('collapseBtn').addEventListener('click', function () {
+    var p = document.getElementById('panel');
+    p.classList.toggle('collapsed');
+    this.textContent = p.classList.contains('collapsed') ? '+' : '–';
+  });
+  var daysEl = document.getElementById('days');
+  daysEl.addEventListener('input', function () { sim.days = parseFloat(daysEl.value); });
+  var speedEl = document.getElementById('speed');
+  function applySpeed() {
+    sim.speed = 0.3 * Math.pow(40, parseFloat(speedEl.value) / 100);
+    document.getElementById('speedV').textContent = sim.speed.toFixed(1) + ' 天/秒';
+  }
+  speedEl.addEventListener('input', applySpeed); applySpeed(); refreshPlay();
+
+  // ================= 概念卡 =================
+  var STAGES = [
+    ['两个独立的时钟', '月亮的"远近"由椭圆轨道决定（近点月 <em>27.55 天</em>转一圈），"圆缺"由日地月几何决定（朔望月 <em>29.53 天</em>一圈）。看右上图双钟：金针（满月）比银针（近地点）跑得慢，每月落后约 2 天。'],
+    ['追及 · 每 413 天撞车', '金针追银针像秒针追分针：追平需要 <em>14 个朔望月 ≈ 413 天</em>。重合 = 满月发生在近地点 = <em>超级月亮</em>——月球带着金色光环与扩散脉冲环，底部时间轴的金色段滑入波谷。'],
+    ['近大远小 · 大 14% 亮 30%', '三维场景按真实比例（e=0.0549）：把相机拉近月球再拖到 206 天后（微月亮），透视里的月球肉眼可见地缩小。视直径差 14%、亮度差 30%——"超级"的全部物理含量。'],
+    ['术语与真相', '"超级月亮"是 1979 年占星师发明的流行词，天文学只说"近地点满月"。裸眼看孤月难辨 14%——震撼照片靠的是地平线低月 + 前景对比 + "月亮错觉"。反向还有更小更暗的<em>微月亮</em>（点「微月亮对比」）。']
+  ];
+  var stageDot = document.getElementById('stageDot'), stageTitle = document.getElementById('stageTitle'), stageBody = document.getElementById('stageBody');
+  var lastStage = 0;
+  stageTitle.textContent = STAGES[0][0]; stageBody.innerHTML = STAGES[0][1];
+  function updateStage(m, isSuper) {
+    var align = Math.min(Math.abs(m.anom - 180), 360 - Math.abs(m.anom - 180));
+    var s = isSuper ? 3 : align < 60 ? 2 : 1;
+    if (s !== lastStage) {
+      lastStage = s;
+      stageDot.textContent = '概念 ' + s + ' / 4';
+      stageTitle.textContent = STAGES[s - 1][0];
+      stageBody.innerHTML = STAGES[s - 1][1];
+    }
+  }
+
+  // ================= 主循环 =================
+  var stats = document.getElementById('stats');
+  var frames = 0, lastStat = performance.now(), lastT = performance.now(), lastRT = 0;
+  var badge = document.getElementById('badge');
+  var dDist = document.getElementById('dDist'), dPh = document.getElementById('dPh'),
+      dSize = document.getElementById('dSize'), dBri = document.getElementById('dBri'), dSt = document.getElementById('dSt');
+
+  function render(t) {
+    var rdt = clamp((t - lastRT) / 1000, 0, 0.05);
+    lastRT = t;
+    var dt = Math.min((t - lastT) / 1000, 0.1);
+    lastT = t;
+    if (sim.playing) {
+      sim.days += sim.speed * dt;
+      if (sim.days > 413) sim.days -= 413;
+      if (document.activeElement !== daysEl) daysEl.value = Math.round(sim.days * 2) / 2;
+    }
+    if (autoRot) cam.yaw += rdt * 0.07;
+    document.getElementById('daysV').textContent = Math.round(sim.days) + ' 天';
+
+    var m = moonEph(curMs());
+    var size = 31.1 * (385000.56 / m.dist);
+    var bri = Math.round(Math.pow(385000.56 / m.dist, 2) * 100);
+    var isSuper = m.dist < 360000 && m.phase > 160 && m.phase < 200;
+    var isMicro = m.dist > 398000 && m.phase > 160 && m.phase < 200;
+    var flash = 0.5 + 0.5 * Math.sin(t / 1000 * 5);
+
+    drawScene(m, t / 1000, isSuper, flash);
+    drawPhase(m);
+    drawClock(m);
+    drawTimeline();
+
+    dDist.textContent = (m.dist / 10000).toFixed(2);
+    dPh.textContent = Math.round(m.phase);
+    dSize.textContent = size.toFixed(1);
+    dBri.textContent = (bri - 100) > 0 ? '+' + (bri - 100) : bri - 100;
+    dSt.textContent = isSuper ? '超级月亮！' : isMicro ? '微月亮（最远满月）' :
+      (m.phase > 140 && m.phase < 220) ? (m.dist < 375000 ? '近的满月' : '满月（中距）') : '非满月 · 两针未对齐';
+    badge.style.display = isSuper ? 'block' : 'none';
+    updateStage(m, isSuper);
+
+    frames++;
+    if (t - lastStat > 500) {
+      stats.textContent = Math.round(frames * 1000 / (t - lastStat)) + ' FPS · 距离 ' + cam.dist.toFixed(1) + ' · ' + canvas.width + '×' + canvas.height;
+      frames = 0; lastStat = t;
+    }
+  }
+  window.__smStats = function () {
+    var m = moonEph(curMs());
+    return { days: Math.round(sim.days), dist: Math.round(m.dist), phase: Math.round(m.phase),
+             isSuper: m.dist < 360000 && m.phase > 160 && m.phase < 200 };
+  };
+
+  resize();
+  try { render(performance.now()); } catch (er) { showError('渲染出错：\n' + (er && er.stack || er)); return; }
+  (function loop(t) {
+    try { render(t); } catch (er) { showError('渲染出错：\n' + (er && er.stack || er)); return; }
+    requestAnimationFrame(loop);
+  })(performance.now());
+})();
+</script>
+</body>
+</html>
