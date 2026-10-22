@@ -47,6 +47,7 @@ export default defineConfig({
             { text: '七星连珠', link: '/physics/planets' },
             { text: '超级月亮', link: '/physics/supermoon' },
             { text: '日食', link: '/physics/eclipse' },
+            { text: '极光', link: '/physics/aurora' },
           ],
         },
         { text: '数学几何', items: [] },

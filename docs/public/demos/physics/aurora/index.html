@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#000000">
+<title>极光 · 天空的窗帘</title>
+<link rel="icon" href="data:,">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; color: #dbe4f5; }
+  #gl { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+
+  .card { position: fixed; background: rgba(8, 11, 20, 0.58); border: 1px solid rgba(140, 165, 220, 0.16); border-radius: 14px; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 6px 30px rgba(0,0,0,0.45); }
+  #title { top: 16px; left: 16px; padding: 10px 16px; user-select: none; }
+  #title h1 { font-size: 15px; font-weight: 600; letter-spacing: 1px; color: #f2f6ff; }
+  #title p { font-size: 11px; color: #8fa2c7; margin-top: 2px; }
+
+  #magCard { top: 16px; right: 16px; padding: 8px; }
+  #magCard p { font: 10px/1.4 ui-monospace, Menlo, monospace; color: #7488ad; text-align: center; margin-top: 3px; }
+
+  #data { top: 210px; right: 16px; padding: 10px 14px; font: 11px/1.8 ui-monospace, Menlo, monospace; color: #9db1d8; user-select: none; min-width: 204px; }
+  #data b { color: #a8ffcf; font-weight: 600; }
+  #data .row2 { display: flex; justify-content: space-between; gap: 14px; }
+
+  #stats { bottom: 16px; right: 16px; padding: 7px 12px; font: 11px ui-monospace, Menlo, monospace; color: #9db1d8; user-select: none; }
+
+  #panel { bottom: 16px; left: 16px; width: 252px; padding: 12px 14px 14px; }
+  #panel header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  #panel header span { font-size: 12px; font-weight: 600; color: #c8d6f2; letter-spacing: 1px; }
+  #collapseBtn { background: none; border: 1px solid rgba(140,165,220,.25); color: #9db1d8; border-radius: 6px; width: 22px; height: 22px; cursor: pointer; font-size: 12px; line-height: 1; }
+  #panel .row { display: flex; align-items: center; justify-content: space-between; margin: 9px 0; gap: 8px; }
+  #panel label { font-size: 12px; color: #b7c6e6; white-space: nowrap; }
+  #panel input[type=range] { flex: 1; min-width: 0; accent-color: #6cff9e; height: 14px; cursor: pointer; }
+  #panel .val { font: 11px ui-monospace, Menlo, monospace; color: #a8ffcf; width: 56px; text-align: right; }
+  .btns { display: flex; gap: 8px; margin-top: 12px; }
+  .btns button { flex: 1; background: rgba(108,255,158,.10); border: 1px solid rgba(108,255,158,.38); color: #b9ffd4; border-radius: 8px; padding: 6px 0; font-size: 12px; cursor: pointer; }
+  .btns button:hover { background: rgba(108,255,158,.24); }
+  .btns button.lit { background: rgba(108,255,158,.34); color: #eafff2; }
+  #panel.collapsed .row, #panel.collapsed .btns { display: none; }
+  #panel .note { font-size: 10px; color: #6d7f9f; margin-top: 8px; line-height: 1.5; }
+
+  #stage { right: 272px; bottom: 16px; width: 332px; padding: 11px 14px 12px; }
+  #stage header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 5px; }
+  #stage .dot { font: 10px ui-monospace, Menlo, monospace; color: #a8ffcf; letter-spacing: 1px; }
+  #stage h2 { font-size: 13px; font-weight: 600; color: #d6ffe6; letter-spacing: 1px; }
+  #stage p { font-size: 11.5px; color: #b9c6e2; line-height: 1.65; }
+  #stage p em { color: #d6ffe6; font-style: normal; }
+
+  #err { position: fixed; inset: 0; display: none; padding: 24px; background: #100505; color: #ff9a9a; font: 12px/1.6 ui-monospace, Menlo, monospace; white-space: pre-wrap; overflow: auto; z-index: 99; }
+  @media (max-width: 880px) { #panel { width: calc(100vw - 32px); } #data, #stage, #magCard { display: none; } }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div class="card" id="title">
+  <h1>极光 · 天空的窗帘</h1>
+  <p>太阳风 · 磁场线 · 氧与氮的发光</p>
+</div>
+
+<div class="card" id="magCard">
+  <canvas id="mag2" width="216" height="132" style="display:block"></canvas>
+  <p>磁层顶视图：粒子沿场线沉降两极</p>
+</div>
+
+<div class="card" id="data">
+  <div class="row2"><span>地磁活动 Kp</span><b id="dKp">–</b></div>
+  <div class="row2"><span>极光带赤道侧边界</span><b><span id="dLat">–</span>° 磁纬</b></div>
+  <div class="row2"><span>观测站磁纬</span><b><span id="dObs">–</span>°</b></div>
+  <div class="row2"><span>状态</span><b id="dSt">–</b></div>
+</div>
+
+<div class="card" id="panel">
+  <header><span>空间天气</span><button id="collapseBtn" title="收起/展开">–</button></header>
+  <div class="row"><label>地磁活动 Kp</label><input type="range" id="kp" min="0" max="9" step="0.1" value="5"><span class="val" id="kpV">5.0</span></div>
+  <div class="row"><label>观测站磁纬</label><input type="range" id="lat" min="40" max="78" step="1" value="66"><span class="val" id="latV">66°</span></div>
+  <div class="row"><label>曝光</label><input type="range" id="exp" min="0.4" max="2.4" step="0.05" value="1.35"><span class="val" id="expV">1.35</span></div>
+  <div class="btns">
+    <button id="cmeBtn">CME 爆发 · 磁暴</button>
+  </div>
+  <div class="note">颜色 = 高度与原子：100 km 氮发紫蓝边、100–250 km 氧 557.7 nm 发绿、>250 km 氧 630 nm 发红。Kp 越大，极光椭圆带越向低纬扩张（Kp9 时漠河也能看到）。着色器示意，非物理精确。</div>
+</div>
+
+<div class="card" id="stage">
+  <header><span class="dot" id="stageDot">概念 1 / 4</span><h2 id="stageTitle">–</h2></header>
+  <p id="stageBody">–</p>
+</div>
+
+<div class="card" id="stats" style="right:272px; bottom:16px;">-- FPS</div>
+<div id="err"></div>
+
+<script id="fs-main" type="x-shader/x-fragment">
+precision highp float;
+uniform vec2 uRes;
+uniform float uT;
+uniform float uKp;
+uniform float uStorm;
+uniform float uLat;
+uniform float uExp;
+float hash(vec2 q){ return fract(sin(dot(q, vec2(127.1, 311.7))) * 43758.5453); }
+float noise(vec2 p){
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x),
+             mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y);
+}
+float fbm(vec2 p){
+  float a = 0.5, s = 0.0;
+  for (int k = 0; k < 5; k++) { s += a * noise(p); p = p * 2.03 + 7.7; a *= 0.5; }
+  return s;
+}
+vec3 auroraAt(vec2 uv, float t){
+  // 伪体积极光（nimitz 式）：fbm 域扭曲让帘幕流动，沿高度步进累积发光
+  float kp = uKp + uStorm * 5.0;
+  float inten = clamp(kp / 9.0, 0.10, 1.8);
+  // 域扭曲：帘幕的横向漂移与褶皱
+  float warp = fbm(vec2(uv.x * 1.6 + t * 0.05, t * 0.12)) - 0.5;
+  float warp2 = fbm(vec2(uv.x * 0.7 - t * 0.03, t * 0.09 + 5.0)) - 0.5;
+  float x = uv.x * (2.2 + warp * 1.8) + warp * 2.3 + warp2 * 1.2 + t * 0.06;
+  // 双尺度竖直细帘（striations）
+  float streak = 0.32 + 0.68 * noise(vec2(x * 30.0, t * 0.22));
+  streak *= 0.5 + 0.5 * noise(vec2(x * 130.0 + 7.0, t * 0.45));
+  float base = 0.30 + 0.10 * fbm(vec2(x, t * 0.05)) + 0.04 * warp;
+  float hMax = 0.48 + 0.32 * kp / 9.0;
+  vec3 acc = vec3(0.0);
+  for (int i = 0; i < 36; i++) {
+    float h = float(i) / 36.0;
+    float y = base + h * hMax;
+    float n = fbm(vec2(x * 1.25, y * 3.2 - t * 0.20 + h * 2.2));
+    float band = smoothstep(0.34, 0.74, n) * (1.0 - h) * exp(-h * 1.7);
+    vec3 green = vec3(0.10, 1.00, 0.36);
+    vec3 teal  = vec3(0.06, 0.72, 0.62);
+    vec3 red   = vec3(1.00, 0.16, 0.28);
+    vec3 purp  = vec3(0.44, 0.20, 0.95);
+    vec3 col = mix(green, teal, smoothstep(0.05, 0.45, h));
+    col = mix(col, red, smoothstep(0.48, 0.95, h) * (0.30 + 0.70 * kp / 9.0));
+    col = mix(col, purp, smoothstep(0.78, 1.12, h));
+    acc += col * band;
+  }
+  acc *= inten * streak * 0.20;
+  // 帘底亮缘（100km 氧绿最亮）
+  acc += vec3(0.10, 0.95, 0.36) * inten * streak * 0.16 * exp(-abs(uv.y - base) * 15.0);
+  return acc;
+}
+void main(){
+  vec2 uv = gl_FragCoord.xy / uRes;
+  float t = uT;
+  vec3 col = vec3(0.010, 0.016, 0.038);
+  // 星（亮且会眨）
+  float st = hash(floor(gl_FragCoord.xy / 2.5));
+  col += vec3(0.9, 0.95, 1.0) * step(0.9968, st) * (0.35 + 0.45 * sin(t * 1.7 + st * 90.0));
+  // 月亮
+  vec2 mpt = vec2(0.82, 0.82);
+  float md = distance(uv, mpt);
+  col += vec3(0.85, 0.9, 1.0) * exp(-md * 55.0) * 0.8;
+  col += vec3(0.55, 0.62, 0.8) * exp(-md * 16.0) * 0.22;
+  // 山脊
+  float ridge = 0.26 + 0.075 * fbm(vec2(uv.x * 3.1, 3.7)) + 0.03 * fbm(vec2(uv.x * 9.0, 9.1));
+  float ground = step(uv.y, ridge);
+  // 极光（地面以上），观测纬度越低帘越贴近地平线
+  float latF = clamp((uLat - 45.0) / 30.0, 0.0, 1.0);
+  vec2 auv = uv;
+  auv.y = mix(uv.y * 0.55 + 0.10, uv.y, latF);           // 低纬：压向地平线
+  vec3 aur = auroraAt(auv, t) * mix(0.25, 1.0, latF);
+  col += aur;
+  // 湖面（山脊以下）：倒影 + 波纹
+  if (ground > 0.5 && uv.y < 0.16) {
+    vec2 ruv = vec2(uv.x + 0.012 * sin(t * 0.8 + uv.y * 40.0), ridge + (ridge - uv.y) * 0.9);
+    vec3 raur = auroraAt(ruv, t) * mix(0.25, 1.0, latF) * 0.5;
+    float wob = 0.7 + 0.3 * sin(uv.y * 170.0 + t * 2.2 + uv.x * 34.0);
+    col = mix(vec3(0.012, 0.026, 0.048), raur * wob + vec3(0.008, 0.018, 0.036), 0.88);
+  } else if (ground > 0.5) {
+    // 山体：双层剪影
+    float ridge2 = 0.26 + 0.05 * fbm(vec2(uv.x * 3.1 + 40.0, 3.7));
+    vec3 mtn = mix(vec3(0.012, 0.018, 0.028), vec3(0.02, 0.026, 0.04), step(uv.y, ridge2));
+    col = mix(col, mtn, 0.94);
+  }
+  // 暮色与暖地平光
+  col += vec3(0.10, 0.13, 0.20) * pow(1.0 - abs(uv.y - 0.32), 6.0) * 0.45;
+  col += vec3(0.16, 0.10, 0.08) * pow(max(1.0 - distance(uv, vec2(0.15, 0.28)) * 2.2, 0.0), 4.0) * 0.30;
+  // 柔和色调映射 + 暗角
+  col = 1.0 - exp(-col * uExp * 2.6);
+  col *= 1.0 - 0.42 * dot(uv - 0.5, uv - 0.5);
+  gl_FragColor = vec4(col, 1.0);
+}
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var canvas = document.getElementById('gl');
+  var errBox = document.getElementById('err');
+  var gl = canvas.getContext('webgl', { antialias: false, alpha: false })
+        || canvas.getContext('experimental-webgl', { antialias: false, alpha: false });
+  if (!gl) { showError('当前浏览器不支持 WebGL，无法运行。'); return; }
+  function showError(m) { errBox.style.display = 'block'; errBox.textContent = m; }
+  function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+
+  var vs = 'attribute vec2 aPos; void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }';
+  function compile(type, src) {
+    var sh = gl.createShader(type);
+    gl.shaderSource(sh, src); gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh));
+    return sh;
+  }
+  var prog = gl.createProgram();
+  gl.attachShader(prog, compile(gl.VERTEX_SHADER, vs));
+  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, document.getElementById('fs-main').textContent));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { showError('着色器链接失败'); return; }
+  gl.useProgram(prog);
+  var b = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, b);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  var aPos = gl.getAttribLocation(prog, 'aPos');
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+  var U = {};
+  ['uRes', 'uT', 'uKp', 'uStorm', 'uLat', 'uExp'].forEach(function (n) { U[n] = gl.getUniformLocation(prog, n); });
+
+  // ================= 状态 =================
+  var kp = 5, obsLat = 66, expo = 1.35, storm = 0, paused = false;
+
+  function bindRange(id, cb) {
+    var el = document.getElementById(id), out = document.getElementById(id + 'V');
+    function ap() { var t = cb(parseFloat(el.value)); if (out) out.textContent = (t === undefined) ? parseFloat(el.value) : t; }
+    el.addEventListener('input', ap); ap();
+  }
+  bindRange('kp', function (v) { kp = v; return v.toFixed(1); });
+  bindRange('lat', function (v) { obsLat = v; return Math.round(v) + '°'; });
+  bindRange('exp', function (v) { expo = v; return v.toFixed(2); });
+  document.getElementById('cmeBtn').addEventListener('click', function () { storm = 1; });
+  document.getElementById('collapseBtn').addEventListener('click', function () {
+    var p = document.getElementById('panel');
+    p.classList.toggle('collapsed');
+    this.textContent = p.classList.contains('collapsed') ? '+' : '–';
+  });
+  window.addEventListener('keydown', function (e) {
+    if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); paused = !paused; }
+  });
+
+  // ================= 磁层插图（2D） =================
+  var magCv = document.getElementById('mag2'), mg = magCv.getContext('2d');
+  var parts = [];
+  for (var i = 0; i < 90; i++) parts.push({ s: Math.random(), line: (Math.random() * 2 - 1), sp: 0.25 + Math.random() * 0.5 });
+  function drawMag(t) {
+    var w = magCv.width, h = magCv.height;
+    mg.clearRect(0, 0, w, h);
+    mg.fillStyle = 'rgba(5,8,15,0.9)'; mg.fillRect(0, 0, w, h);
+    var cx = w * 0.36, cy = h / 2;
+    var kpi = clamp((kp + storm * 5) / 9, 0, 1.4);
+    // 太阳风粒子（从左飞来）
+    mg.fillStyle = 'rgba(255,214,150,0.8)';
+    for (var p2 = 0; p2 < 26; p2++) {
+      var sx = ((t * (60 + p2 * 7) + p2 * 97) % (w + 40)) - 20;
+      mg.fillRect(w - sx, (p2 * 53) % h, 2, 2);
+    }
+    // 磁层顶（抛物线壳）
+    mg.strokeStyle = 'rgba(108,255,158,0.4)'; mg.lineWidth = 1.5;
+    mg.beginPath();
+    for (var yy = -h; yy <= h; yy += 6) {
+      var xx = cx - 46 + (yy * yy) / (h * 1.5);
+      mg.lineTo(xx, cy + yy);
+    }
+    mg.stroke();
+    // 偶极场线
+    mg.strokeStyle = 'rgba(120,160,255,0.35)'; mg.lineWidth = 1;
+    for (var L2 = 1; L2 <= 4; L2++) {
+      [-1, 1].forEach(function (sgn) {
+        mg.beginPath();
+        for (var a2 = 0; a2 <= 64; a2++) {
+          var th = a2 / 64 * Math.PI;
+          var r2 = L2 * 9 / Math.sin(th * th) ;
+          r2 = L2 * 10 * Math.pow(Math.sin(th), 2);
+          var px = cx + r2 * Math.cos(th) * 1.0, py = cy + r2 * Math.sin(th) * sgn * 1.15;
+          a2 ? mg.lineTo(px, py) : mg.moveTo(px, py);
+        }
+        mg.stroke();
+      });
+    }
+    // 地球
+    var eg = mg.createRadialGradient(cx - 3, cy - 3, 1, cx, cy, 12);
+    eg.addColorStop(0, '#9fd0ff'); eg.addColorStop(1, '#1d4d8f');
+    mg.fillStyle = eg; mg.beginPath(); mg.arc(cx, cy, 9, 0, Math.PI * 2); mg.fill();
+    // 沉降粒子沿场线滑向两极（数量 ∝ Kp）
+    parts.forEach(function (p, idx) {
+      p.s += p.sp * 0.016 * (0.5 + kpi);
+      if (p.s > 1) p.s = 0;
+      var s2 = p.s;
+      var L3 = 1 + Math.floor((idx % 20) / 5);
+      var sgn = p.line < 0 ? -1 : 1;
+      var th = Math.PI * (0.15 + 0.7 * (s2 < 0.5 ? s2 * 2 : (1 - s2) * 2));
+      var r3 = L3 * 10 * Math.pow(Math.sin(th), 2);
+      var px = cx + r3 * Math.cos(th), py = cy + r3 * Math.sin(th) * sgn * 1.15;
+      mg.fillStyle = idx % 3 ? 'rgba(120,255,170,0.9)' : 'rgba(200,140,255,0.9)';
+      mg.beginPath(); mg.arc(px, py, 1.6, 0, Math.PI * 2); mg.fill();
+    });
+    // 极光环
+    mg.strokeStyle = 'rgba(120,255,170,' + (0.3 + 0.6 * kpi).toFixed(2) + ')';
+    mg.lineWidth = 2;
+    [-1, 1].forEach(function (sgn) {
+      mg.beginPath(); mg.ellipse(cx, cy + sgn * 10.5, 6.5 + 2.5 * kpi, 2.6, 0, 0, Math.PI * 2); mg.stroke();
+    });
+    mg.fillStyle = 'rgba(148,164,200,0.85)'; mg.font = '9px sans-serif'; mg.textAlign = 'left';
+    mg.fillText('太阳风 →', 6, 12);
+  }
+
+  // ================= 概念卡 =================
+  var STAGES = [
+    ['太阳风 · 磁层', '太阳每秒抛出上百万吨带电粒子流（<em>太阳风</em>）。地球磁场把它挡在身后，形成子弹形的<em>磁层</em>（插图左侧抛物线壳）——地球因此免于被剥去大气。'],
+    ['场线 · 只亮两极', '被磁场捕获的粒子只能<em>沿磁场线螺旋前进</em>（像串在珠子上的线），最终沉降进南北两极上空的高层大气——所以极光几乎只在极区出现，形状沿场线成帘幕。'],
+    ['颜色 · 原子与高度', '发光的是被撞激发的大气原子：<em>氧</em>在 100–250 km 发绿（557.7 nm）、更高处发红（630 nm）；<em>氮</em>在 ~100 km 发紫蓝边。所以绿帘红顶紫边 = 一张高度表。'],
+    ['磁暴 · 低纬极光', 'CME（日冕物质抛射）撞击磁层时，磁层被压缩、更多能量注入——极光椭圆带向<em>低纬扩张</em>（Kp 指数飙升）。1859 年卡林顿事件时，加勒比海都能看到极光。点「CME 爆发」试试。']
+  ];
+  var stageDot = document.getElementById('stageDot'), stageTitle = document.getElementById('stageTitle'), stageBody = document.getElementById('stageBody');
+  var lastStage = 0;
+  stageTitle.textContent = STAGES[0][0]; stageBody.innerHTML = STAGES[0][1];
+
+  var dKp = document.getElementById('dKp'), dLat = document.getElementById('dLat'),
+      dObs = document.getElementById('dObs'), dSt = document.getElementById('dSt');
+  var CNK = ['平静', '微扰', '活跃', '活跃+', '磁暴', '磁暴+', '强磁暴', '强磁暴+', '特大磁暴', '极端'];
+
+  // ================= 主循环 =================
+  var stats = document.getElementById('stats');
+  var frames = 0, lastStat = performance.now(), lastT = performance.now();
+
+  function render(t) {
+    var dt = Math.min((t - lastT) / 1000, 0.1);
+    lastT = t;
+    if (!paused) storm = Math.max(0, storm - dt * 0.12);
+    var dpr = Math.min(window.devicePixelRatio || 1, 1.6);
+    var w = Math.max(2, Math.round(canvas.clientWidth * dpr)), h = Math.max(2, Math.round(canvas.clientHeight * dpr));
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    gl.viewport(0, 0, w, h);
+    gl.uniform2f(U.uRes, w, h);
+    gl.uniform1f(U.uT, t / 1000);
+    gl.uniform1f(U.uKp, kp);
+    gl.uniform1f(U.uStorm, storm);
+    gl.uniform1f(U.uLat, obsLat);
+    gl.uniform1f(U.uExp, expo);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    drawMag(t / 1000);
+
+    var kEff = Math.min(kp + storm * 5, 9);
+    var bnd = Math.round(67 - kEff * 2.4);
+    dKp.textContent = kEff.toFixed(1) + (kEff >= 5 ? ' · ' + CNK[Math.round(kEff)] : '');
+    dLat.textContent = bnd;
+    dObs.textContent = Math.round(obsLat);
+    dSt.textContent = obsLat >= bnd + 4 ? '极光当空（天顶附近）' : obsLat >= bnd - 3 ? '极光在北天低空' : kEff > 7 ? '磁暴中 · 低纬可见' : '今晚看不到（在极光带以南）';
+    var stage = storm > 0.25 ? 4 : kEff >= 5 ? 3 : 2;
+    if (stage !== lastStage) {
+      lastStage = stage;
+      stageDot.textContent = '概念 ' + stage + ' / 4';
+      stageTitle.textContent = STAGES[stage - 1][0];
+      stageBody.innerHTML = STAGES[stage - 1][1];
+    }
+    frames++;
+    if (t - lastStat > 500) {
+      stats.textContent = Math.round(frames * 1000 / (t - lastStat)) + ' FPS · ' + w + '×' + h;
+      frames = 0; lastStat = t;
+    }
+  }
+  window.__auStats = function () { return { kp: kp, storm: storm }; };
+
+  try { render(performance.now()); } catch (er) { showError('渲染出错：\n' + (er && er.stack || er)); return; }
+  (function loop(t) {
+    try { render(t); } catch (er) { showError('渲染出错：\n' + (er && er.stack || er)); return; }
+    requestAnimationFrame(loop);
+  })(performance.now());
+})();
+</script>
+</body>
+</html>
