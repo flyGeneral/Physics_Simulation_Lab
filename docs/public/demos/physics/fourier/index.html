@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="data:,">
-<title>傅里叶变换 · 时域与频域的桥</title>
+<title>傅里叶变换 · 正弦基上的分解与合成</title>
 <style>
   :root{
     --bg:#0f1115; --panel:#161a21; --line:#262c36; --txt:#e8eaf0; --dim:#9aa3b2;
@@ -37,10 +37,10 @@
 </head>
 <body>
 <header>
-  <h1>傅里叶变换 · 时域与频域的桥</h1>
-  <p class="sub">两个方向看同一件事：<b>合成</b>——正弦谐波如何叠加成方波；<b>拆解</b>——变换如何逐个频率「问出」信号成分。时域与频域只是同一信号的两套坐标系。</p>
+  <h1>傅里叶变换 · 正弦基上的分解与合成</h1>
+  <p class="sub">傅里叶的核心只有一件事：<b>正弦族是一组两两正交的基</b>，任何信号都是它们的加权和。合成 = 加权和，拆解 = 投影求系数，两者互为逆操作。</p>
 </header>
-<p class="formula">X(k) = Σₙ x(n)·e^(−i2πkn/N)　→　直觉版：把信号和每个频率的基波「相乘再求和」，得到该频率的成分多少</p>
+<p class="formula">正交性：Σ sin(kt)·sin(mt) = 0（k≠m，异频相抵）　·　系数 = 投影：a(k) = (2/N)·Σ x(n)·sin(2πkn/N)</p>
 
 <div class="panel">
   <div class="row">
@@ -74,9 +74,9 @@
   </div>
 </div>
 
-<div class="view-title" id="t1">时域波形（虚线=目标，实线=当前合成结果）</div>
+<div class="view-title" id="t1">波形：虚线=目标，实线=正弦基的当前加权和（级数）</div>
 <canvas id="cv1"></canvas>
-<div class="view-title" style="margin-top:12px" id="t2">频域谱线（各谐波成分的幅度）</div>
+<div class="view-title" style="margin-top:12px" id="t2">分解视角：每个基波分量的系数（按频率排开即频谱）</div>
 <canvas id="cv2"></canvas>
 <div class="readout" id="readout"></div>
 <p class="note" id="noteEl">吉布斯现象：谐波再多，跳变处的过冲也只收敛到约 8.95%——傅里叶级数在间断点「固执」的天性。</p>
@@ -171,8 +171,8 @@ function drawSynth(){
   }
   const gib = S.wave==='square' ? (peak-1)*100 : 0;
   $('readout').innerHTML =
-    `<span>已用谐波 <b>N = ${S.N}</b></span>` +
-    `<span>最高频率成分 <b>${S.N}·f₀</b></span>` +
+    `<span>已用基波数 <b>N = ${S.N}</b></span>` +
+    `<span>最高次基 <b>${S.N}·f₀</b></span>` +
     `<span>波形越「尖」，谐波幅度按 <b>1/n</b> 衰减越慢（方波），三角波按 <b>1/n²</b> 快速收敛</span>` +
     (S.wave==='square' ? `<span>吉布斯过冲 <b>${gib.toFixed(2)}%</b>（理论极限 8.95%）</span>` : '');
 }
@@ -272,8 +272,8 @@ function drawAnalysis(){
   const amp = Math.abs(2*corr/NS);
   $('readout').innerHTML =
     `<span>当前探测 <b>k = ${A.k}</b></span>` +
-    `<span>该频率成分幅度（相关归一）<b>${amp.toFixed(3)}</b></span>` +
-    `<span>谱线高度 = 信号×基波 逐点相乘后的<b>求和</b>（同相抵消慢=成分强）</span>` +
+    `<span>投影系数（归一）<b>${amp.toFixed(3)}</b></span>` +
+    `<span>谱线 = 信号×基波 逐点乘积的<b>求和</b>（k 不对时正负面积抵消为零——正交性）</span>` +
     (A.sig==='beat' ? `<span>非整数周期落窗 → 能量摊给邻近 k，谱线<b>泄漏</b>成裙边</span>` : '');
 }
 
@@ -283,13 +283,13 @@ $('modeSeg').querySelectorAll('button').forEach(b => b.onclick = () => {
   $('modeSeg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x===b));
   $('cSynth').style.display    = mode==='synth'    ? '' : 'none';
   $('cAnalysis').style.display = mode==='analysis' ? '' : 'none';
-  $('t1').textContent = mode==='synth' ? '时域波形（虚线=目标，实线=当前合成结果）'
-                                       : '相关过程（上：信号 / 中：探测基波 / 下：逐点乘积，面积求和=谱线）';
-  $('t2').textContent = mode==='synth' ? '频域谱线（各谐波成分的幅度）'
-                                       : '频域谱线（每个 k 探测一次的结果——这就是离散傅里叶变换）';
+  $('t1').textContent = mode==='synth' ? '波形：虚线=目标，实线=正弦基的当前加权和（级数）'
+                                       : '投影过程（上：信号 / 中：基波 k / 下：逐点乘积，正负面积抵消后剩下的 = 系数）';
+  $('t2').textContent = mode==='synth' ? '分解视角：每个基波分量的系数（按频率排开即频谱）'
+                                       : '逐基投影的结果：每个 k 投影一次得到的系数——这就是离散傅里叶变换';
   $('noteEl').textContent = mode==='synth'
-    ? '吉布斯现象：谐波再多，跳变处的过冲也只收敛到约 8.95%——傅里叶级数在间断点「固执」的天性。'
-    : '变换的直觉：拿每个频率的余弦波当「探针」与信号相乘求和——对上了就积累出大值，对不上就正负抵消归零。';
+    ? '吉布斯现象：谐波再多，跳变处的过冲也只收敛到约 8.95%——高频系数衰减慢，截断的尾部在跳变两侧聚成固定过冲。'
+    : '正交性是关键：k 对准时面积积累出系数；k 挪开后正负面积恰好抵消为零——异频互相「看不见」，分解才唯一。';
 });
 $('waveSeg').querySelectorAll('button').forEach(b => b.onclick = () => {
   S.wave = b.dataset.wave;
