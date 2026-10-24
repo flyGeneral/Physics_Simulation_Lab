@@ -62,7 +62,10 @@ export default defineConfig({
           text: '科幻设想',
           items: [{ text: '曲率驱动', link: '/physics/curvature' }],
         },
-        { text: '数学几何', items: [] },
+        {
+          text: '数学几何',
+          items: [{ text: '傅里叶变换', link: '/physics/fourier' }],
+        },
       ],
       '/sensing/': [
         {

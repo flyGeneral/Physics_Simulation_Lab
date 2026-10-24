@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>傅里叶变换 · 时域与频域的桥</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#161a21; --line:#262c36; --txt:#e8eaf0; --dim:#9aa3b2;
+    --cyan:#4cc9f0; --green:#7ae582; --orange:#f4a261; --yellow:#ffd166; --red:#ef6b73;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+       font:14px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:14px}
+  header h1{font-size:18px;margin:0 0 2px}
+  header .sub{color:var(--dim);font-size:12.5px;margin:0 0 12px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:12px}
+  .row{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}
+  .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{background:transparent;color:var(--dim);border:0;padding:6px 13px;cursor:pointer;font-size:13px}
+  .seg button.on{background:var(--cyan);color:#08222c;font-weight:600}
+  label.sl{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--dim)}
+  label.sl b{color:var(--txt);font-weight:600;font-size:12.5px}
+  input[type=range]{width:160px;accent-color:var(--cyan)}
+  button.act{background:#1d232e;border:1px solid var(--line);color:var(--txt);border-radius:8px;
+             padding:6px 12px;cursor:pointer;font-size:13px}
+  button.act:hover{border-color:var(--cyan);color:var(--cyan)}
+  .view-title{font-size:12.5px;color:var(--dim);margin:0 0 6px}
+  canvas{display:block;width:100%;border-radius:8px;border:1px solid var(--line);background:#0b0d11}
+  .readout{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--dim);padding:9px 2px 0}
+  .readout b{color:var(--txt)}
+  .note{color:var(--dim);font-size:12px;margin:10px 0 0}
+  .formula{font-family:ui-monospace,Menlo,monospace;color:var(--cyan);background:#0b0d11;
+           border:1px solid var(--line);border-radius:6px;padding:6px 10px;font-size:12.5px;margin:0 0 12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>傅里叶变换 · 时域与频域的桥</h1>
+  <p class="sub">两个方向看同一件事：<b>合成</b>——正弦谐波如何叠加成方波；<b>拆解</b>——变换如何逐个频率「问出」信号成分。时域与频域只是同一信号的两套坐标系。</p>
+</header>
+<p class="formula">X(k) = Σₙ x(n)·e^(−i2πkn/N)　→　直觉版：把信号和每个频率的基波「相乘再求和」，得到该频率的成分多少</p>
+
+<div class="panel">
+  <div class="row">
+    <div class="seg" id="modeSeg">
+      <button data-mode="synth" class="on">⬆ 合成：级数搭出波形</button>
+      <button data-mode="analysis">⬇ 拆解：变换读出成分</button>
+    </div>
+    <span id="cSynth" class="row" style="gap:14px">
+      <div class="seg" id="waveSeg">
+        <button data-wave="square" class="on">方波</button>
+        <button data-wave="saw">锯齿波</button>
+        <button data-wave="tri">三角波</button>
+      </div>
+      <label class="sl">谐波项数 N <b><span id="nV">1</span> / 64</b>
+        <input type="range" id="nharm" min="1" max="64" step="1" value="1"></label>
+      <button class="act" id="playBtn">▶ 逐项搭建</button>
+      <button class="act" id="stepBtn2">⏭ +1 项</button>
+      <button class="act" id="resetBtn2">↺ 重置</button>
+    </span>
+    <span id="cAnalysis" class="row" style="gap:14px;display:none">
+      <div class="seg" id="sigSeg">
+        <button data-sig="two" class="on">双音</button>
+        <button data-sig="single">单音</button>
+        <button data-sig="square">方波</button>
+        <button data-sig="beat">拍频·泄漏</button>
+      </div>
+      <label class="sl">探测频率 k <b><span id="kV">5</span> / 63</b>
+        <input type="range" id="kf" min="0" max="63" step="1" value="5"></label>
+      <button class="act" id="sweepBtn">🔄 扫描全频段</button>
+    </span>
+  </div>
+</div>
+
+<div class="view-title" id="t1">时域波形（虚线=目标，实线=当前合成结果）</div>
+<canvas id="cv1"></canvas>
+<div class="view-title" style="margin-top:12px" id="t2">频域谱线（各谐波成分的幅度）</div>
+<canvas id="cv2"></canvas>
+<div class="readout" id="readout"></div>
+<p class="note" id="noteEl">吉布斯现象：谐波再多，跳变处的过冲也只收敛到约 8.95%——傅里叶级数在间断点「固执」的天性。</p>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+
+/* ---------------- 全局状态 ---------------- */
+let mode = 'synth';
+const S = { wave:'square', N:1, building:false, buildT:0 };        // 合成
+const A = { sig:'two', k:5, sweeping:false, sweepT:0 };             // 拆解
+const NS = 256;   // 拆解模式采样点数
+const KMAX = 63;  // 探测频率上限（每窗周期数）
+
+/* ---------------- 画布 ---------------- */
+const cv1 = $('cv1'), cv2 = $('cv2');
+const W1 = 940, H1 = 230, W2 = 940, H2 = 190;
+function setup(c,w,h){
+  const d = window.devicePixelRatio||1;
+  c.width=w*d; c.height=h*d; c.getContext('2d').setTransform(d,0,0,d,0,0);
+}
+setup(cv1,W1,H1); setup(cv2,W2,H2);
+const g1 = cv1.getContext('2d'), g2 = cv2.getContext('2d');
+
+/* ============ 合成模式：傅里叶级数 ============ */
+// 各波形的谐波系数 a_n（n 从 1 起）：方波/三角波只含奇次
+function coef(wave, n){
+  if(wave === 'square')  return (n%2) ? 4/Math.PI/n : 0;
+  if(wave === 'saw')     return 2/Math.PI * ((n%2)?1:-1) / n;
+  if(wave === 'tri')     return (n%2) ? 8/(Math.PI*Math.PI) * (((n-1)/2)%2?-1:1)/(n*n) : 0;
+  return 0;
+}
+function partialSum(wave, N, t){
+  let s = 0;
+  for(let n=1;n<=N;n++) s += coef(wave,n) * Math.sin(n*t);
+  return s;
+}
+function target(wave, t){
+  const u = ((t/Math.PI) % 2 + 2) % 2;         // 0..2
+  if(wave === 'square') return u < 1 ? 1 : -1;
+  if(wave === 'saw')    return u - 1;
+  return u < 1 ? (u*2-1) : (2-u)*2-1;          // tri
+}
+function drawSynth(){
+  const mL=40, mR=10, mT=12, mB=20, iw=W1-mL-mR, ih=H1-mT-mB;
+  const y0 = mT+ih/2, Y = v => y0 - v*(ih/2*0.82);
+  const T = 4*Math.PI, X = t => mL + (t/T)*iw;
+  g1.fillStyle='#0b0d11'; g1.fillRect(0,0,W1,H1);
+  g1.strokeStyle='#232a34';
+  g1.beginPath(); g1.moveTo(mL,Y(0)); g1.lineTo(mL+iw,Y(0)); g1.stroke();
+  g1.fillStyle='#9aa3b2'; g1.font='11px sans-serif'; g1.textAlign='right';
+  g1.fillText('+1', mL-6, Y(1)+4); g1.fillText('0', mL-6, Y(0)+4); g1.fillText('−1', mL-6, Y(-1)+4);
+  // 目标波形（虚线）
+  g1.strokeStyle='rgba(154,163,178,0.45)'; g1.setLineDash([4,4]); g1.lineWidth=1.4;
+  g1.beginPath();
+  for(let x=0;x<=iw;x+=2){
+    const t = x/iw*T, v = target(S.wave,t);
+    x? g1.lineTo(mL+x,Y(v)) : g1.moveTo(mL+x,Y(v));
+  }
+  g1.stroke(); g1.setLineDash([]);
+  // 当前部分和
+  g1.strokeStyle='#4cc9f0'; g1.lineWidth=2; g1.beginPath();
+  for(let x=0;x<=iw;x+=2){
+    const v = partialSum(S.wave,S.N,x/iw*T);
+    x? g1.lineTo(mL+x,Y(v)) : g1.moveTo(mL+x,Y(v));
+  }
+  g1.stroke();
+  // 谱线：前 64 次谐波幅度，已启用的高亮
+  const mL2=40, mR2=10, mT2=10, mB2=20, iw2=W2-mL2-mR2, ih2=H2-mT2-mB2;
+  const amax = 4/Math.PI;
+  const Xn = n => mL2 + (n-0.5)/64*iw2, bw = iw2/64*0.55;
+  g2.fillStyle='#0b0d11'; g2.fillRect(0,0,W2,H2);
+  g2.strokeStyle='#232a34';
+  g2.beginPath(); g2.moveTo(mL2,mT2+ih2); g2.lineTo(mL2+iw2,mT2+ih2); g2.stroke();
+  for(let n=1;n<=64;n++){
+    const a = Math.abs(coef(S.wave,n));
+    const h = a/amax*ih2;
+    g2.fillStyle = n <= S.N ? '#f4a261' : '#2a3240';
+    g2.fillRect(Xn(n)-bw/2, mT2+ih2-h, bw, h);
+  }
+  g2.fillStyle='#9aa3b2'; g2.font='11px sans-serif'; g2.textAlign='center';
+  g2.fillText('谐波序号 n →', mL2+iw2/2, H2-6);
+  g2.textAlign='left';
+  g2.fillText('幅度 4/π·(1/n)', mL2+4, mT2+10);
+  // 吉布斯过冲测量（跳变附近）
+  let peak = 0;
+  for(let t=Math.PI/2-0.02; t<Math.PI/2+0.25; t+=0.002){
+    const v = partialSum(S.wave,S.N,t);
+    if(v > peak) peak = v;
+  }
+  const gib = S.wave==='square' ? (peak-1)*100 : 0;
+  $('readout').innerHTML =
+    `<span>已用谐波 <b>N = ${S.N}</b></span>` +
+    `<span>最高频率成分 <b>${S.N}·f₀</b></span>` +
+    `<span>波形越「尖」，谐波幅度按 <b>1/n</b> 衰减越慢（方波），三角波按 <b>1/n²</b> 快速收敛</span>` +
+    (S.wave==='square' ? `<span>吉布斯过冲 <b>${gib.toFixed(2)}%</b>（理论极限 8.95%）</span>` : '');
+}
+
+/* ============ 拆解模式：DFT 探测 ============ */
+let sig = new Float64Array(NS), mag = new Float64Array(KMAX+1);
+function buildSig(){
+  const A5 = 1.0;
+  if(A.sig === 'single'){
+    for(let n=0;n<NS;n++) sig[n] = A5*Math.sin(2*Math.PI*5*n/NS);
+  }else if(A.sig === 'two'){
+    for(let n=0;n<NS;n++) sig[n] = A5*Math.sin(2*Math.PI*5*n/NS) + 0.6*Math.sin(2*Math.PI*14*n/NS);
+  }else if(A.sig === 'square'){
+    let s = 0;
+    for(let n=0;n<NS;n++){
+      s = 0;
+      for(let m=1;m<=11;m+=2) s += 4/Math.PI/m*Math.sin(2*Math.PI*3*m*n/NS);
+      sig[n] = s;
+    }
+  }else{ // beat：非整数周期 → 泄漏
+    for(let n=0;n<NS;n++) sig[n] = Math.sin(2*Math.PI*10*n/NS) + Math.sin(2*Math.PI*11.5*n/NS);
+  }
+  for(let k=0;k<=KMAX;k++){
+    let c = 0, s2 = 0;
+    for(let n=0;n<NS;n++){
+      const ph = 2*Math.PI*k*n/NS;
+      c += sig[n]*Math.cos(ph); s2 += sig[n]*Math.sin(ph);
+    }
+    mag[k] = 2*Math.hypot(c,s2)/NS;
+  }
+}
+function drawAnalysis(){
+  const mL=40, mR=10, mT=8, mB=8, iw=W1-mL-mR, ih=(H1-mT-mB)/3;
+  const X = n => mL + n/(NS-1)*iw;
+  g1.fillStyle='#0b0d11'; g1.fillRect(0,0,W1,H1);
+  g1.font='11px sans-serif'; g1.textAlign='right';
+  const lane = (i, label) => {
+    const y0 = mT + ih*i + ih/2;
+    g1.strokeStyle='#1c222c';
+    g1.beginPath(); g1.moveTo(mL,y0); g1.lineTo(mL+iw,y0); g1.stroke();
+    g1.fillStyle='#9aa3b2'; g1.fillText(label, mL-6, mT+ih*i+12);
+    return y0;
+  };
+  // 通道 1：信号
+  {
+    const y0 = lane(0,'信号');
+    g1.strokeStyle='#4cc9f0'; g1.lineWidth=1.6; g1.beginPath();
+    for(let n=0;n<NS;n+=2){
+      const y = y0 - sig[n]*(ih/2*0.8);
+      n? g1.lineTo(X(n),y) : g1.moveTo(X(n),y);
+    }
+    g1.stroke();
+  }
+  // 通道 2：当前探测基波 sin(2πkn/N)
+  {
+    const y0 = lane(1,'基波 k');
+    g1.strokeStyle='#f4a261'; g1.lineWidth=1.6; g1.beginPath();
+    for(let n=0;n<NS;n+=2){
+      const v = Math.sin(2*Math.PI*A.k*n/NS);
+      const y = y0 - v*(ih/2*0.8);
+      n? g1.lineTo(X(n),y) : g1.moveTo(X(n),y);
+    }
+    g1.stroke();
+  }
+  // 通道 3：乘积（面积=相关性）
+  let corr = 0;
+  {
+    const y0 = lane(2,'乘积·求和');
+    for(let n=0;n<NS;n++){
+      const v = sig[n]*Math.sin(2*Math.PI*A.k*n/NS);
+      corr += v;
+      if(n%2===0){
+        const h = v*(ih/2*0.35);
+        g1.fillStyle = v>=0 ? 'rgba(122,229,130,0.55)' : 'rgba(239,107,115,0.55)';
+        g1.fillRect(X(n), h>=0 ? y0-h : y0, (iw/NS)*2+1, Math.abs(h));
+      }
+    }
+    g1.strokeStyle='#232a34';
+    g1.beginPath(); g1.moveTo(mL,y0); g1.lineTo(mL+iw,y0); g1.stroke();
+  }
+  // 谱线
+  const mL2=40, mR2=10, mT2=10, mB2=20, iw2=W2-mL2-mR2, ih2=H2-mT2-mB2;
+  const Xk = k => mL2 + (k+0.5)/(KMAX+1)*iw2, bw = iw2/(KMAX+1)*0.6;
+  g2.fillStyle='#0b0d11'; g2.fillRect(0,0,W2,H2);
+  g2.strokeStyle='#232a34';
+  g2.beginPath(); g2.moveTo(mL2,mT2+ih2); g2.lineTo(mL2+iw2,mT2+ih2); g2.stroke();
+  const mmax = Math.max(0.08, ...mag);
+  for(let k=0;k<=KMAX;k++){
+    const h = mag[k]/mmax*ih2;
+    g2.fillStyle = k===A.k ? '#ffd166' : '#4cc9f0';
+    g2.globalAlpha = k===A.k ? 1 : 0.75;
+    g2.fillRect(Xk(k)-bw/2, mT2+ih2-h, bw, h);
+    g2.globalAlpha = 1;
+  }
+  g2.fillStyle='#9aa3b2'; g2.font='11px sans-serif'; g2.textAlign='center';
+  g2.fillText('探测频率 k（每窗 k 个周期）→', mL2+iw2/2, H2-6);
+  const amp = Math.abs(2*corr/NS);
+  $('readout').innerHTML =
+    `<span>当前探测 <b>k = ${A.k}</b></span>` +
+    `<span>该频率成分幅度（相关归一）<b>${amp.toFixed(3)}</b></span>` +
+    `<span>谱线高度 = 信号×基波 逐点相乘后的<b>求和</b>（同相抵消慢=成分强）</span>` +
+    (A.sig==='beat' ? `<span>非整数周期落窗 → 能量摊给邻近 k，谱线<b>泄漏</b>成裙边</span>` : '');
+}
+
+/* ---------------- 控件 ---------------- */
+$('modeSeg').querySelectorAll('button').forEach(b => b.onclick = () => {
+  mode = b.dataset.mode;
+  $('modeSeg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x===b));
+  $('cSynth').style.display    = mode==='synth'    ? '' : 'none';
+  $('cAnalysis').style.display = mode==='analysis' ? '' : 'none';
+  $('t1').textContent = mode==='synth' ? '时域波形（虚线=目标，实线=当前合成结果）'
+                                       : '相关过程（上：信号 / 中：探测基波 / 下：逐点乘积，面积求和=谱线）';
+  $('t2').textContent = mode==='synth' ? '频域谱线（各谐波成分的幅度）'
+                                       : '频域谱线（每个 k 探测一次的结果——这就是离散傅里叶变换）';
+  $('noteEl').textContent = mode==='synth'
+    ? '吉布斯现象：谐波再多，跳变处的过冲也只收敛到约 8.95%——傅里叶级数在间断点「固执」的天性。'
+    : '变换的直觉：拿每个频率的余弦波当「探针」与信号相乘求和——对上了就积累出大值，对不上就正负抵消归零。';
+});
+$('waveSeg').querySelectorAll('button').forEach(b => b.onclick = () => {
+  S.wave = b.dataset.wave;
+  $('waveSeg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x===b));
+});
+$('nharm').oninput = e => { S.N = +e.target.value; $('nV').textContent = S.N; S.building = false; $('playBtn').textContent='▶ 逐项搭建'; };
+$('playBtn').onclick = () => { S.building = !S.building; S.buildT = 0;
+  $('playBtn').textContent = S.building ? '⏸ 暂停搭建' : '▶ 逐项搭建'; };
+$('stepBtn2').onclick = () => { S.N = Math.min(64, S.N+1); $('nharm').value = S.N; $('nV').textContent = S.N; };
+$('resetBtn2').onclick= () => { S.N = 1; $('nharm').value = 1; $('nV').textContent = 1; S.building=false;
+  $('playBtn').textContent='▶ 逐项搭建'; };
+$('sigSeg').querySelectorAll('button').forEach(b => b.onclick = () => {
+  A.sig = b.dataset.sig;
+  $('sigSeg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x===b));
+  buildSig();
+});
+$('kf').oninput = e => { A.k = +e.target.value; $('kV').textContent = A.k; A.sweeping = false; $('sweepBtn').textContent='🔄 扫描全频段'; };
+$('sweepBtn').onclick = () => { A.sweeping = !A.sweeping; A.sweepT = A.k/63;
+  $('sweepBtn').textContent = A.sweeping ? '⏹ 停止扫描' : '🔄 扫描全频段'; };
+
+/* ---------------- 主循环 ---------------- */
+let last = performance.now();
+buildSig();
+function loop(now){
+  const dt = Math.min(50, now-last); last = now;
+  if(mode === 'synth'){
+    if(S.building){
+      S.buildT += dt/420;                       // 每 0.42s 加一项
+      const n2 = Math.min(64, 1+Math.floor(S.buildT));
+      if(n2 !== S.N){ S.N = n2; $('nharm').value = S.N; $('nV').textContent = S.N; }
+      if(S.N >= 64) { S.building = false; $('playBtn').textContent = '▶ 逐项搭建'; }
+    }
+    drawSynth();
+  }else{
+    if(A.sweeping){
+      A.sweepT += dt/7000;                      // 7s 扫完全频段
+      if(A.sweepT >= 1){ A.sweeping = false; $('sweepBtn').textContent='🔄 扫描全频段'; A.sweepT = 0; }
+      A.k = Math.round(Math.min(63, A.sweepT*63));
+      $('kf').value = A.k; $('kV').textContent = A.k;
+    }
+    drawAnalysis();
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
